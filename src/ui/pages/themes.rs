@@ -112,29 +112,61 @@ pub struct ThemesPage {
     apply_button: gtk4::Button,
     themes: Rc<RefCell<Vec<ThemeEnv>>>,
     loading: Rc<std::cell::Cell<bool>>,
+    /// Suppresses model updates while `load_overrides_into_ui` restores state
+    loading_overrides: Rc<std::cell::Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
 
+/// Build a wrapper box containing [CheckButton | SpinRow].
+/// The check controls `row.set_sensitive` — the row starts insensitive.
+/// Returns (wrapper, row, check).
 fn make_checkable_spin(title: &str, min: f64, max: f64, step: f64, digits: u32)
-    -> (libadwaita::SpinRow, gtk4::CheckButton)
+    -> (gtk4::Box, libadwaita::SpinRow, gtk4::CheckButton)
 {
     let row = libadwaita::SpinRow::with_range(min, max, step);
     row.set_title(title);
     row.set_digits(digits);
+    row.set_hexpand(true);
+    row.set_sensitive(false);
+
     let check = gtk4::CheckButton::new();
     check.set_valign(gtk4::Align::Center);
-    row.add_prefix(&check);
-    (row, check)
+    check.set_margin_start(8);
+    check.set_margin_end(4);
+    {
+        let r = row.clone();
+        check.connect_active_notify(move |c| r.set_sensitive(c.is_active()));
+    }
+
+    let wrapper = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    wrapper.append(&check);
+    wrapper.append(&row);
+    (wrapper, row, check)
 }
 
-fn make_checkable_entry(title: &str) -> (libadwaita::EntryRow, gtk4::CheckButton) {
+/// Build a wrapper box containing [CheckButton | EntryRow].
+/// The check controls `row.set_sensitive` — the row starts insensitive.
+/// Returns (wrapper, row, check).
+fn make_checkable_entry(title: &str) -> (gtk4::Box, libadwaita::EntryRow, gtk4::CheckButton) {
     let row = libadwaita::EntryRow::new();
     row.set_title(title);
     row.set_show_apply_button(true);
+    row.set_hexpand(true);
+    row.set_sensitive(false);
+
     let check = gtk4::CheckButton::new();
     check.set_valign(gtk4::Align::Center);
-    row.add_prefix(&check);
-    (row, check)
+    check.set_margin_start(8);
+    check.set_margin_end(4);
+    {
+        let r = row.clone();
+        check.connect_active_notify(move |c| r.set_sensitive(c.is_active()));
+    }
+
+    let wrapper = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    wrapper.append(&check);
+    wrapper.append(&row);
+    (wrapper, row, check)
 }
 
 impl ThemesPage {
@@ -170,21 +202,21 @@ impl ThemesPage {
         appearance_group.set_title("Appearance Overrides");
         appearance_group.set_description(Some("Check a row to override the theme's built-in value"));
 
-        let (wallpaper_row, wallpaper_check) = make_checkable_entry("Wallpaper path");
-        let (font_family_row, font_family_check) = make_checkable_entry("Font family");
-        let (font_size_row, font_size_check) = make_checkable_spin("Font size", 6.0, 72.0, 1.0, 0);
-        let (gap_inner_row, gap_inner_check) = make_checkable_spin("Inner gap (px)", 0.0, 100.0, 1.0, 0);
-        let (gap_outer_row, gap_outer_check) = make_checkable_spin("Outer gap (px)", 0.0, 100.0, 1.0, 0);
-        let (border_width_row, border_width_check) = make_checkable_spin("Border width (px)", 0.0, 20.0, 1.0, 0);
-        let (waybar_opacity_row, waybar_opacity_check) = make_checkable_spin("Waybar opacity", 0.0, 1.0, 0.05, 2);
+        let (wallpaper_wrapper, wallpaper_row, wallpaper_check) = make_checkable_entry("Wallpaper path");
+        let (font_family_wrapper, font_family_row, font_family_check) = make_checkable_entry("Font family");
+        let (font_size_wrapper, font_size_row, font_size_check) = make_checkable_spin("Font size", 6.0, 72.0, 1.0, 0);
+        let (gap_inner_wrapper, gap_inner_row, gap_inner_check) = make_checkable_spin("Inner gap (px)", 0.0, 100.0, 1.0, 0);
+        let (gap_outer_wrapper, gap_outer_row, gap_outer_check) = make_checkable_spin("Outer gap (px)", 0.0, 100.0, 1.0, 0);
+        let (border_width_wrapper, border_width_row, border_width_check) = make_checkable_spin("Border width (px)", 0.0, 20.0, 1.0, 0);
+        let (waybar_opacity_wrapper, waybar_opacity_row, waybar_opacity_check) = make_checkable_spin("Waybar opacity", 0.0, 1.0, 0.05, 2);
 
-        appearance_group.add(&wallpaper_row);
-        appearance_group.add(&font_family_row);
-        appearance_group.add(&font_size_row);
-        appearance_group.add(&gap_inner_row);
-        appearance_group.add(&gap_outer_row);
-        appearance_group.add(&border_width_row);
-        appearance_group.add(&waybar_opacity_row);
+        appearance_group.add(&wallpaper_wrapper);
+        appearance_group.add(&font_family_wrapper);
+        appearance_group.add(&font_size_wrapper);
+        appearance_group.add(&gap_inner_wrapper);
+        appearance_group.add(&gap_outer_wrapper);
+        appearance_group.add(&border_width_wrapper);
+        appearance_group.add(&waybar_opacity_wrapper);
         outer_box.append(&appearance_group);
 
         // ── Apply button ──────────────────────────────────────────────────────
@@ -200,6 +232,7 @@ impl ThemesPage {
 
         let themes: Rc<RefCell<Vec<ThemeEnv>>> = Rc::new(RefCell::new(Vec::new()));
         let loading = Rc::new(std::cell::Cell::new(false));
+        let loading_overrides = Rc::new(std::cell::Cell::new(false));
 
         // ── Theme selection signal ────────────────────────────────────────────
         {
@@ -223,7 +256,9 @@ impl ThemesPage {
             let state = Rc::clone(&app_state);
             let row_ref = wallpaper_row.clone();
             let check_ref = wallpaper_check.clone();
+            let lo = Rc::clone(&loading_overrides);
             wallpaper_row.connect_apply(move |_| {
+                if lo.get() { return; }
                 let v = row_ref.text().to_string();
                 let v = v.trim().to_string();
                 state.borrow_mut().settings_mut().theme_overrides.wallpaper =
@@ -234,7 +269,9 @@ impl ThemesPage {
         {
             let state = Rc::clone(&app_state);
             let row_ref = wallpaper_row.clone();
+            let lo = Rc::clone(&loading_overrides);
             wallpaper_check.connect_active_notify(move |c| {
+                if lo.get() { return; }
                 if !c.is_active() {
                     state.borrow_mut().settings_mut().theme_overrides.wallpaper = None;
                     state.borrow_mut().mark_dirty();
@@ -254,7 +291,9 @@ impl ThemesPage {
             let state = Rc::clone(&app_state);
             let row_ref = font_family_row.clone();
             let check_ref = font_family_check.clone();
+            let lo = Rc::clone(&loading_overrides);
             font_family_row.connect_apply(move |_| {
+                if lo.get() { return; }
                 let v = row_ref.text().to_string();
                 let v = v.trim().to_string();
                 state.borrow_mut().settings_mut().theme_overrides.font_family =
@@ -265,7 +304,9 @@ impl ThemesPage {
         {
             let state = Rc::clone(&app_state);
             let row_ref = font_family_row.clone();
+            let lo = Rc::clone(&loading_overrides);
             font_family_check.connect_active_notify(move |c| {
+                if lo.get() { return; }
                 if !c.is_active() {
                     state.borrow_mut().settings_mut().theme_overrides.font_family = None;
                     state.borrow_mut().mark_dirty();
@@ -287,7 +328,9 @@ impl ThemesPage {
                 {
                     let state = Rc::clone(&app_state);
                     let row_ref = $row.clone();
+                    let lo = Rc::clone(&loading_overrides);
                     $check.connect_active_notify(move |c| {
+                        if lo.get() { return; }
                         state.borrow_mut().settings_mut().theme_overrides.$field =
                             if c.is_active() { Some(row_ref.value() as $ty) } else { None };
                         state.borrow_mut().mark_dirty();
@@ -298,7 +341,9 @@ impl ThemesPage {
                     let state = Rc::clone(&app_state);
                     let check_ref = $check.clone();
                     let row_ref = $row.clone();
+                    let lo = Rc::clone(&loading_overrides);
                     $row.connect_value_notify(move |_| {
+                        if lo.get() { return; }
                         if check_ref.is_active() {
                             state.borrow_mut().settings_mut().theme_overrides.$field =
                                 Some(row_ref.value() as $ty);
@@ -351,33 +396,52 @@ impl ThemesPage {
             gap_outer_check, gap_outer_row,
             border_width_check, border_width_row,
             waybar_opacity_check, waybar_opacity_row,
-            apply_button, themes, loading, app_state,
+            apply_button, themes, loading, loading_overrides, app_state,
         }
     }
 
     pub fn on_navigate(&self) {
         let state = self.app_state.borrow();
-        let selected_path = state.settings().theme.as_ref().map(|t| t.path.clone());
+        let theme = state.settings().theme.clone();
         let custom_path = state.settings().custom_themes_path.clone();
         let overrides = state.settings().theme_overrides.clone();
         drop(state);
+
+        // If the stored theme has no path (saved before the path field existed),
+        // resolve it by scanning now and update settings silently (no dirty mark).
+        let selected_path = match theme {
+            Some(ref sel) if sel.path.is_empty() => {
+                let themes = scan_env_themes(custom_path.as_deref());
+                if let Some(found) = themes.iter().find(|t| t.name == sel.name) {
+                    let mut s = self.app_state.borrow_mut();
+                    if let Some(ref mut t) = s.settings_mut().theme {
+                        t.path = found.path.clone();
+                    }
+                    Some(found.path.clone())
+                } else {
+                    None
+                }
+            }
+            Some(ref sel) => Some(sel.path.clone()),
+            None => None,
+        };
 
         self.load_overrides_into_ui(&overrides);
         self.load_themes(selected_path.as_deref(), custom_path.as_deref());
     }
 
     fn load_overrides_into_ui(&self, overrides: &ThemeOverrides) {
+        self.loading_overrides.set(true);
+
         // Wallpaper
-        let wp_active = overrides.wallpaper.is_some();
-        self.wallpaper_check.set_active(wp_active);
+        self.wallpaper_check.set_active(overrides.wallpaper.is_some());
         if let Some(ref wp) = overrides.wallpaper { self.wallpaper_row.set_text(wp); }
 
         // Font family
-        let ff_active = overrides.font_family.is_some();
-        self.font_family_check.set_active(ff_active);
+        self.font_family_check.set_active(overrides.font_family.is_some());
         if let Some(ref ff) = overrides.font_family { self.font_family_row.set_text(ff); }
 
-        // Spin rows: set check + value (value defaults to 0/theme-default when None)
+        // Spin rows: set check then value
         self.font_size_check.set_active(overrides.font_size.is_some());
         self.font_size_row.set_value(overrides.font_size.unwrap_or(10) as f64);
 
@@ -392,6 +456,8 @@ impl ThemesPage {
 
         self.waybar_opacity_check.set_active(overrides.waybar_opacity.is_some());
         self.waybar_opacity_row.set_value(overrides.waybar_opacity.unwrap_or(1.0));
+
+        self.loading_overrides.set(false);
     }
 
     pub fn load_themes(&self, selected_path: Option<&str>, custom_path: Option<&str>) {

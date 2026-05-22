@@ -235,6 +235,17 @@ pub fn envsubst(template: &str, vars: &std::collections::HashMap<String, String>
     result
 }
 
+/// Find the path to a theme `.env` file by name, scanning standard directories.
+/// Used as a fallback when the stored `ThemeSelection.path` is empty.
+fn find_theme_path_by_name(name: &str) -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    let candidates = [
+        format!("{}/.config/sway/themes/{}.env", home, name),
+        format!("{}/source/SwayConfig/themes/{}.env", home, name),
+    ];
+    candidates.into_iter().find(|p| std::path::Path::new(p).exists())
+}
+
 /// Apply a theme — writes sway colors, waybar style.css, GTK settings, wallpaper.
 ///
 /// The theme `.env` file is parsed; overrides from `ThemeOverrides` are applied.
@@ -253,12 +264,20 @@ pub fn apply_theme(
         waybar_restarted: false,
     };
 
+    // Resolve path — may be empty if loaded from settings saved before the path field was added.
+    // Fall back to scanning the standard theme directories by name.
+    let resolved_path: String = if !selection.path.is_empty() {
+        selection.path.clone()
+    } else {
+        find_theme_path_by_name(&selection.name).unwrap_or_default()
+    };
+
     // Parse .env file
-    let env_content = match fs::read_to_string(&selection.path) {
+    let env_content = match fs::read_to_string(&resolved_path) {
         Ok(c) => c,
         Err(e) => {
             result.success = false;
-            result.errors.push(format!("Cannot read theme file {}: {}", selection.path, e));
+            result.errors.push(format!("Cannot read theme file {}: {}", resolved_path, e));
             return result;
         }
     };
