@@ -1,0 +1,60 @@
+name: Main Build, Test, Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-test-publish:
+    name: Build, test, package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libgdk-pixbuf-2.0-dev \
+            libgraphene-1.0-dev \
+            pkg-config \
+            build-essential
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: Test (no GTK)
+        run: cargo test --no-default-features
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build Debian package
+        run: cargo deb --no-build
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          cp target/release/sway-config dist/
+          cp target/debian/*.deb dist/
+
+      - name: Publish artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sway-config-main-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
