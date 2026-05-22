@@ -286,7 +286,7 @@ fn test_keyboard_config_from_sway() {
         .xkb_layouts_as_symbols
         .first()
         .cloned()
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.trim().is_empty())
         .or_else(|| {
             if !sway_layout.is_empty() {
                 Some(sway_layout.clone())

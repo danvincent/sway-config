@@ -25,6 +25,7 @@ jobs:
             libcairo2-dev \
             libgdk-pixbuf-2.0-dev \
             libgraphene-1.0-dev \
+            xvfb \
             pkg-config \
             build-essential
 
@@ -35,10 +36,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-deb
-        run: cargo install cargo-deb --locked
+        run: cargo install cargo-deb --version 3.7.0 --locked
 
       - name: Test (no GTK)
-        run: cargo test --no-default-features
+        run: cargo test --locked --no-default-features
+
+      - name: Test (GTK UI)
+        env:
+          GDK_BACKEND: x11
+        run: xvfb-run -a cargo test --locked --features gtk --test gtk_ui_integration
 
       - name: Build release binary
         run: cargo build --release --locked
