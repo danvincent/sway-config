@@ -2,9 +2,9 @@
 /// Tracks the current settings and dirty state (whether changes have been made)
 use crate::model::settings::Settings;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// Shared application state tracking settings and dirty status
-#[derive(Debug, Clone)]
 pub struct AppState {
     /// Current editable settings
     settings: Settings,
@@ -17,6 +17,9 @@ pub struct AppState {
     touchpads_dirty: bool,
     /// Override config output path for test mode; None uses the XDG default.
     base_config_path: Option<PathBuf>,
+    /// Optional callback fired whenever the state becomes dirty.
+    /// Registered once by the Window to show the apply bar immediately.
+    dirty_listener: Option<Rc<dyn Fn()>>,
 }
 
 impl AppState {
@@ -29,7 +32,14 @@ impl AppState {
             keyboards_dirty: false,
             touchpads_dirty: false,
             base_config_path: None,
+            dirty_listener: None,
         }
+    }
+
+    /// Register a callback that fires once whenever `mark_dirty` transitions the
+    /// state to dirty.  The window uses this to show the apply bar immediately.
+    pub fn set_dirty_listener(&mut self, f: impl Fn() + 'static) {
+        self.dirty_listener = Some(Rc::new(f));
     }
 
     /// Set the config output path override (for test mode).
@@ -43,7 +53,11 @@ impl AppState {
     }
     /// Mark the state as dirty (settings have changed)
     pub fn mark_dirty(&mut self) {
+        let was_clean = !self.dirty;
         self.dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Mark the state as clean (settings have been saved or reverted)
@@ -98,22 +112,34 @@ impl AppState {
     /// Mark outputs as dirty from an individual-field update.
     /// Use this when updating a single output field via settings_mut() instead of set_outputs().
     pub fn mark_outputs_dirty(&mut self) {
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.outputs_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Mark keyboards as dirty from an individual-field update.
     /// Use this when updating a single keyboard field via settings_mut() instead of set_keyboards().
     pub fn mark_keyboards_dirty(&mut self) {
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.keyboards_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Mark touchpads as dirty from an individual-field update.
     /// Use this when updating a single touchpad field via settings_mut() instead of set_touchpads().
     pub fn mark_touchpads_dirty(&mut self) {
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.touchpads_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Replace all settings (used during revert).
@@ -134,22 +160,34 @@ impl AppState {
     /// Update outputs in settings and mark dirty
     pub fn set_outputs(&mut self, outputs: Vec<crate::model::output::OutputConfig>) {
         self.settings.outputs = outputs;
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.outputs_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Update keyboards in settings and mark dirty
     pub fn set_keyboards(&mut self, keyboards: Vec<crate::model::input::KeyboardConfig>) {
         self.settings.keyboards = keyboards;
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.keyboards_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Update touchpads in settings and mark dirty
     pub fn set_touchpads(&mut self, touchpads: Vec<crate::model::input::TouchpadConfig>) {
         self.settings.touchpads = touchpads;
+        let was_clean = !self.dirty;
         self.dirty = true;
         self.touchpads_dirty = true;
+        if was_clean {
+            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+        }
     }
 
     /// Refresh detected outputs — updates settings without marking dirty.

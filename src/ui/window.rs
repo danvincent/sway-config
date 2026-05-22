@@ -49,6 +49,17 @@ impl SwayConfigWindow {
         let store_path = store.path.clone();
         let app_state = Rc::new(RefCell::new(AppState::new(store.settings)));
 
+        // Create the apply bar early so the dirty listener can reference it
+        let apply_bar = ApplyBar::new();
+
+        // Register dirty listener — shows the apply bar the moment any page marks dirty
+        {
+            let bar = apply_bar.clone();
+            app_state.borrow_mut().set_dirty_listener(move || {
+                bar.set_visible(true);
+            });
+        }
+
         // Create the main navigation split view
         let split_view = libadwaita::NavigationSplitView::new();
         split_view.set_sidebar_width_unit(libadwaita::LengthUnit::Sp);
@@ -127,9 +138,6 @@ impl SwayConfigWindow {
         stack.set_visible_child_name("outputs");
 
         content_box.append(&stack);
-
-        // Create the apply bar
-        let apply_bar = ApplyBar::new();
 
         // Add apply bar at the bottom (hidden initially)
         let separator = gtk4::Separator::new(gtk4::Orientation::Horizontal);

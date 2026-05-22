@@ -94,18 +94,47 @@ pub fn active_theme_path() -> Option<String> {
 pub struct ThemesPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
+    wallpaper_check: gtk4::CheckButton,
     wallpaper_row: libadwaita::EntryRow,
+    font_family_check: gtk4::CheckButton,
     font_family_row: libadwaita::EntryRow,
+    font_size_check: gtk4::CheckButton,
     font_size_row: libadwaita::SpinRow,
+    gap_inner_check: gtk4::CheckButton,
     gap_inner_row: libadwaita::SpinRow,
+    gap_outer_check: gtk4::CheckButton,
     gap_outer_row: libadwaita::SpinRow,
+    border_width_check: gtk4::CheckButton,
     border_width_row: libadwaita::SpinRow,
+    waybar_opacity_check: gtk4::CheckButton,
     waybar_opacity_row: libadwaita::SpinRow,
     #[allow(dead_code)]
     apply_button: gtk4::Button,
     themes: Rc<RefCell<Vec<ThemeEnv>>>,
     loading: Rc<std::cell::Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
+}
+
+fn make_checkable_spin(title: &str, min: f64, max: f64, step: f64, digits: u32)
+    -> (libadwaita::SpinRow, gtk4::CheckButton)
+{
+    let row = libadwaita::SpinRow::with_range(min, max, step);
+    row.set_title(title);
+    row.set_digits(digits);
+    let check = gtk4::CheckButton::new();
+    check.set_valign(gtk4::Align::Center);
+    row.add_prefix(&check);
+    (row, check)
+}
+
+fn make_checkable_entry(title: &str) -> (libadwaita::EntryRow, gtk4::CheckButton) {
+    let row = libadwaita::EntryRow::new();
+    row.set_title(title);
+    row.set_show_apply_button(true);
+    let check = gtk4::CheckButton::new();
+    check.set_valign(gtk4::Align::Center);
+    row.add_prefix(&check);
+    (row, check)
 }
 
 impl ThemesPage {
@@ -139,31 +168,15 @@ impl ThemesPage {
         // ── Appearance overrides ─────────────────────────────────────────────
         let appearance_group = libadwaita::PreferencesGroup::new();
         appearance_group.set_title("Appearance Overrides");
-        appearance_group.set_description(Some("Leave blank/zero to use the theme's built-in values"));
+        appearance_group.set_description(Some("Check a row to override the theme's built-in value"));
 
-        let wallpaper_row = libadwaita::EntryRow::new();
-        wallpaper_row.set_title("Wallpaper path");
-        wallpaper_row.set_show_apply_button(true);
-
-        let font_family_row = libadwaita::EntryRow::new();
-        font_family_row.set_title("Font family");
-        font_family_row.set_show_apply_button(true);
-
-        let font_size_row = libadwaita::SpinRow::with_range(0.0, 72.0, 1.0);
-        font_size_row.set_title("Font size (0 = theme default)");
-
-        let gap_inner_row = libadwaita::SpinRow::with_range(0.0, 100.0, 1.0);
-        gap_inner_row.set_title("Inner gap (px, 0 = theme default)");
-
-        let gap_outer_row = libadwaita::SpinRow::with_range(0.0, 100.0, 1.0);
-        gap_outer_row.set_title("Outer gap (px, 0 = theme default)");
-
-        let border_width_row = libadwaita::SpinRow::with_range(0.0, 20.0, 1.0);
-        border_width_row.set_title("Border width (px, 0 = theme default)");
-
-        let waybar_opacity_row = libadwaita::SpinRow::with_range(0.0, 1.0, 0.05);
-        waybar_opacity_row.set_title("Waybar opacity (0 = theme default)");
-        waybar_opacity_row.set_digits(2);
+        let (wallpaper_row, wallpaper_check) = make_checkable_entry("Wallpaper path");
+        let (font_family_row, font_family_check) = make_checkable_entry("Font family");
+        let (font_size_row, font_size_check) = make_checkable_spin("Font size", 6.0, 72.0, 1.0, 0);
+        let (gap_inner_row, gap_inner_check) = make_checkable_spin("Inner gap (px)", 0.0, 100.0, 1.0, 0);
+        let (gap_outer_row, gap_outer_check) = make_checkable_spin("Outer gap (px)", 0.0, 100.0, 1.0, 0);
+        let (border_width_row, border_width_check) = make_checkable_spin("Border width (px)", 0.0, 20.0, 1.0, 0);
+        let (waybar_opacity_row, waybar_opacity_check) = make_checkable_spin("Waybar opacity", 0.0, 1.0, 0.05, 2);
 
         appearance_group.add(&wallpaper_row);
         appearance_group.add(&font_family_row);
@@ -205,50 +218,101 @@ impl ThemesPage {
             });
         }
 
-        // ── Wallpaper apply signal ────────────────────────────────────────────
+        // ── Wallpaper signals ─────────────────────────────────────────────────
         {
             let state = Rc::clone(&app_state);
             let row_ref = wallpaper_row.clone();
+            let check_ref = wallpaper_check.clone();
             wallpaper_row.connect_apply(move |_| {
-                let val = row_ref.text().to_string();
-                let v = val.trim().to_string();
+                let v = row_ref.text().to_string();
+                let v = v.trim().to_string();
                 state.borrow_mut().settings_mut().theme_overrides.wallpaper =
-                    if v.is_empty() { None } else { Some(v) };
+                    if check_ref.is_active() && !v.is_empty() { Some(v) } else { None };
                 state.borrow_mut().mark_dirty();
             });
         }
+        {
+            let state = Rc::clone(&app_state);
+            let row_ref = wallpaper_row.clone();
+            wallpaper_check.connect_active_notify(move |c| {
+                if !c.is_active() {
+                    state.borrow_mut().settings_mut().theme_overrides.wallpaper = None;
+                    state.borrow_mut().mark_dirty();
+                } else {
+                    let v = row_ref.text().to_string();
+                    let v = v.trim().to_string();
+                    if !v.is_empty() {
+                        state.borrow_mut().settings_mut().theme_overrides.wallpaper = Some(v);
+                        state.borrow_mut().mark_dirty();
+                    }
+                }
+            });
+        }
 
-        // ── Font family apply signal ──────────────────────────────────────────
+        // ── Font family signals ───────────────────────────────────────────────
         {
             let state = Rc::clone(&app_state);
             let row_ref = font_family_row.clone();
+            let check_ref = font_family_check.clone();
             font_family_row.connect_apply(move |_| {
-                let val = row_ref.text().to_string();
-                let v = val.trim().to_string();
+                let v = row_ref.text().to_string();
+                let v = v.trim().to_string();
                 state.borrow_mut().settings_mut().theme_overrides.font_family =
-                    if v.is_empty() { None } else { Some(v) };
+                    if check_ref.is_active() && !v.is_empty() { Some(v) } else { None };
                 state.borrow_mut().mark_dirty();
             });
         }
-
-        // ── Spin row signals ──────────────────────────────────────────────────
-        macro_rules! spin_signal {
-            ($row:expr, $field:ident, $ty:ty, $zero_is_none:expr) => {{
-                let state = Rc::clone(&app_state);
-                let row_ref = $row.clone();
-                $row.connect_value_notify(move |_| {
-                    let v = row_ref.value() as $ty;
-                    state.borrow_mut().settings_mut().theme_overrides.$field =
-                        if $zero_is_none && v == 0 as $ty { None } else { Some(v) };
+        {
+            let state = Rc::clone(&app_state);
+            let row_ref = font_family_row.clone();
+            font_family_check.connect_active_notify(move |c| {
+                if !c.is_active() {
+                    state.borrow_mut().settings_mut().theme_overrides.font_family = None;
                     state.borrow_mut().mark_dirty();
-                });
+                } else {
+                    let v = row_ref.text().to_string();
+                    let v = v.trim().to_string();
+                    if !v.is_empty() {
+                        state.borrow_mut().settings_mut().theme_overrides.font_family = Some(v);
+                        state.borrow_mut().mark_dirty();
+                    }
+                }
+            });
+        }
+
+        // ── Spin row check + value signals ────────────────────────────────────
+        macro_rules! spin_signals {
+            ($row:expr, $check:expr, $field:ident, $ty:ty) => {{
+                // Check toggled → enable/disable override
+                {
+                    let state = Rc::clone(&app_state);
+                    let row_ref = $row.clone();
+                    $check.connect_active_notify(move |c| {
+                        state.borrow_mut().settings_mut().theme_overrides.$field =
+                            if c.is_active() { Some(row_ref.value() as $ty) } else { None };
+                        state.borrow_mut().mark_dirty();
+                    });
+                }
+                // Value changed → update only when checked
+                {
+                    let state = Rc::clone(&app_state);
+                    let check_ref = $check.clone();
+                    let row_ref = $row.clone();
+                    $row.connect_value_notify(move |_| {
+                        if check_ref.is_active() {
+                            state.borrow_mut().settings_mut().theme_overrides.$field =
+                                Some(row_ref.value() as $ty);
+                            state.borrow_mut().mark_dirty();
+                        }
+                    });
+                }
             }};
         }
-        spin_signal!(font_size_row, font_size, u32, true);
-        spin_signal!(gap_inner_row, gap_inner, u32, true);
-        spin_signal!(gap_outer_row, gap_outer, u32, true);
-        spin_signal!(border_width_row, border_width, u32, true);
-        spin_signal!(waybar_opacity_row, waybar_opacity, f64, true);
+        spin_signals!(font_size_row, font_size_check, font_size, u32);
+        spin_signals!(gap_inner_row, gap_inner_check, gap_inner, u32);
+        spin_signals!(gap_outer_row, gap_outer_check, gap_outer, u32);
+        spin_signals!(border_width_row, border_width_check, border_width, u32);
+        spin_signals!(waybar_opacity_row, waybar_opacity_check, waybar_opacity, f64);
 
         // ── Apply theme button ────────────────────────────────────────────────
         {
@@ -279,8 +343,14 @@ impl ThemesPage {
         }
 
         ThemesPage {
-            widget, list_box, wallpaper_row, font_family_row, font_size_row,
-            gap_inner_row, gap_outer_row, border_width_row, waybar_opacity_row,
+            widget, list_box,
+            wallpaper_check, wallpaper_row,
+            font_family_check, font_family_row,
+            font_size_check, font_size_row,
+            gap_inner_check, gap_inner_row,
+            gap_outer_check, gap_outer_row,
+            border_width_check, border_width_row,
+            waybar_opacity_check, waybar_opacity_row,
             apply_button, themes, loading, app_state,
         }
     }
@@ -297,17 +367,31 @@ impl ThemesPage {
     }
 
     fn load_overrides_into_ui(&self, overrides: &ThemeOverrides) {
-        if let Some(ref wp) = overrides.wallpaper {
-            self.wallpaper_row.set_text(wp);
-        }
-        if let Some(ref ff) = overrides.font_family {
-            self.font_family_row.set_text(ff);
-        }
-        if let Some(fs_) = overrides.font_size { self.font_size_row.set_value(fs_ as f64); }
-        if let Some(gi) = overrides.gap_inner { self.gap_inner_row.set_value(gi as f64); }
-        if let Some(go) = overrides.gap_outer { self.gap_outer_row.set_value(go as f64); }
-        if let Some(bw) = overrides.border_width { self.border_width_row.set_value(bw as f64); }
-        if let Some(wo) = overrides.waybar_opacity { self.waybar_opacity_row.set_value(wo); }
+        // Wallpaper
+        let wp_active = overrides.wallpaper.is_some();
+        self.wallpaper_check.set_active(wp_active);
+        if let Some(ref wp) = overrides.wallpaper { self.wallpaper_row.set_text(wp); }
+
+        // Font family
+        let ff_active = overrides.font_family.is_some();
+        self.font_family_check.set_active(ff_active);
+        if let Some(ref ff) = overrides.font_family { self.font_family_row.set_text(ff); }
+
+        // Spin rows: set check + value (value defaults to 0/theme-default when None)
+        self.font_size_check.set_active(overrides.font_size.is_some());
+        self.font_size_row.set_value(overrides.font_size.unwrap_or(10) as f64);
+
+        self.gap_inner_check.set_active(overrides.gap_inner.is_some());
+        self.gap_inner_row.set_value(overrides.gap_inner.unwrap_or(0) as f64);
+
+        self.gap_outer_check.set_active(overrides.gap_outer.is_some());
+        self.gap_outer_row.set_value(overrides.gap_outer.unwrap_or(0) as f64);
+
+        self.border_width_check.set_active(overrides.border_width.is_some());
+        self.border_width_row.set_value(overrides.border_width.unwrap_or(2) as f64);
+
+        self.waybar_opacity_check.set_active(overrides.waybar_opacity.is_some());
+        self.waybar_opacity_row.set_value(overrides.waybar_opacity.unwrap_or(1.0));
     }
 
     pub fn load_themes(&self, selected_path: Option<&str>, custom_path: Option<&str>) {
