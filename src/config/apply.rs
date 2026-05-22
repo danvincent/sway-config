@@ -175,24 +175,37 @@ fn reload_sway() -> bool {
     }
 }
 
-/// Restart waybar — send SIGUSR2 to reload config in place (waybar 0.9+).
-/// Falls back to kill + relaunch if no process is found.
+/// Restart waybar — uses systemd reload if available, otherwise kill by PID + swaymsg exec.
 fn restart_waybar() -> bool {
     use std::process::Command;
 
-    // Try SIGUSR2 first (causes waybar to reload config without flicker)
-    let running = Command::new("killall")
-        .args(["-SIGUSR2", "waybar"])
+    // Try systemd reload first (ExecReload=kill -SIGUSR2 $MAINPID)
+    let reloaded = Command::new("systemctl")
+        .args(["--user", "reload", "waybar"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
 
-    if running {
+    if reloaded {
         return true;
     }
 
-    // Not running — launch it fresh
-    Command::new("waybar").spawn().is_ok()
+    // Kill any running waybar by PID, then relaunch via swaymsg (inherits Wayland env)
+    if let Ok(output) = Command::new("pgrep").arg("waybar").output() {
+        let pids = String::from_utf8_lossy(&output.stdout);
+        for pid_str in pids.split_whitespace() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                let _ = Command::new("kill").arg(pid.to_string()).output();
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+
+    Command::new("swaymsg")
+        .args(["exec", "waybar"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

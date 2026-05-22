@@ -232,21 +232,19 @@ impl RenderModel {
                 .map(|m| format!("\"{}\"", m))
                 .collect();
 
-            let config_json = serde_json::json!({
+            let mut json_obj = serde_json::json!({
                 "position": position_str,
                 "height": settings.waybar.height,
-                "modules-left": serde_json::Value::Array(
-                    modules_left.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
-                ),
-                "modules-center": serde_json::Value::Array(
-                    modules_center.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
-                ),
-                "modules-right": serde_json::Value::Array(
-                    modules_right.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
-                ),
-                "tray": settings.waybar.tray,
-            })
-            .to_string();
+                "modules-left": modules_left.iter().map(|m| m.trim_matches('"')).collect::<Vec<_>>(),
+                "modules-center": modules_center.iter().map(|m| m.trim_matches('"')).collect::<Vec<_>>(),
+                "modules-right": modules_right.iter().map(|m| m.trim_matches('"')).collect::<Vec<_>>(),
+            });
+
+            // "tray" as a top-level key must be an object — omit it entirely;
+            // the tray module is already included via modules-right when enabled.
+            let _ = json_obj; // suppress unused warning
+            let config_json = serde_json::to_string_pretty(&json_obj)
+                .unwrap_or_else(|_| "{}".to_string());
 
             Some(RenderedWaybar { config_json })
         } else {
