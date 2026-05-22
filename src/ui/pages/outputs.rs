@@ -169,6 +169,8 @@ impl OutputsPage {
         if let Some(res) = &output.resolution {
             let hz = output.refresh_rate.map(|r| r / 1000).unwrap_or(0);
             expander.set_subtitle(&format!("{}×{} @ {}Hz", res.width, res.height, hz));
+        } else {
+            expander.set_subtitle("Auto");
         }
 
         // ── Enabled toggle ───────────────────────────────────────────
@@ -193,10 +195,11 @@ impl OutputsPage {
             .unwrap_or_default();
 
         if !modes_data.is_empty() {
-            let mode_strings: Vec<String> = modes_data
-                .iter()
-                .map(|&(w, h, r)| format_mode(w, h, r))
-                .collect();
+            // "Auto" is index 0; detected modes start at index 1.
+            let mut mode_strings: Vec<String> = vec!["Auto".to_string()];
+            mode_strings.extend(
+                modes_data.iter().map(|&(w, h, r)| format_mode(w, h, r))
+            );
             let model = gtk4::StringList::new(
                 &mode_strings.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
             );
@@ -205,26 +208,32 @@ impl OutputsPage {
             res_row.set_title("Resolution");
             res_row.set_model(Some(&model));
 
-            // Pre-select current resolution
-            if let Some(res) = &output.resolution {
-                let current = format_mode(res.width, res.height, output.refresh_rate.unwrap_or(0));
-                if let Some(pos) = mode_strings.iter().position(|m| m == &current) {
-                    res_row.set_selected(pos as u32);
-                }
-            }
+            // Pre-select current resolution (or Auto if none set)
+            let selected_idx = output.resolution.as_ref()
+                .and_then(|res| {
+                    let current = format_mode(res.width, res.height, output.refresh_rate.unwrap_or(0));
+                    mode_strings.iter().position(|m| m == &current)
+                })
+                .unwrap_or(0); // default to Auto
+            res_row.set_selected(selected_idx as u32);
+
             {
                 let app = self.app_state.clone();
                 let modes_clone = modes_data.clone();
                 res_row.connect_selected_notify(move |row| {
                     let sel = row.selected() as usize;
-                    if let Some(&(w, h, r)) = modes_clone.get(sel) {
-                        let mut state = app.borrow_mut();
-                        if let Some(out) = state.settings_mut().outputs.get_mut(idx) {
+                    let mut state = app.borrow_mut();
+                    if let Some(out) = state.settings_mut().outputs.get_mut(idx) {
+                        if sel == 0 {
+                            // Auto — let sway pick
+                            out.resolution = None;
+                            out.refresh_rate = None;
+                        } else if let Some(&(w, h, r)) = modes_clone.get(sel - 1) {
                             out.resolution = Some(Resolution { width: w, height: h });
                             out.refresh_rate = Some(r);
                         }
-                        state.mark_outputs_dirty();
                     }
+                    state.mark_outputs_dirty();
                 });
             }
             expander.add_row(&res_row);
