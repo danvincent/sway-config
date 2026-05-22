@@ -21,25 +21,7 @@ fn init_gtk() {
 }
 
 #[test]
-fn test_main_window_constructs_with_store() {
-    init_gtk();
-
-    let app = libadwaita::Application::new(
-        Some("com.github.danvincent.sway-config.test"),
-        Default::default(),
-    );
-    app.register(None::<&gtk4::gio::Cancellable>)
-        .expect("app register failed");
-
-    let tmp = tempfile::tempdir().expect("temp dir");
-    let store = sway_config::config::store::SettingsStore::test_store(tmp.path());
-    let window = SwayConfigWindow::new(&app, store);
-
-    assert!(window.window().title().is_some());
-}
-
-#[test]
-fn test_all_pages_construct_widgets() {
+fn test_ui_construction_smoke() {
     init_gtk();
 
     let app_state = Rc::new(RefCell::new(AppState::new(Settings::default())));
@@ -61,4 +43,16 @@ fn test_all_pages_construct_widgets() {
     let _ = notifications.widget();
     let _ = themes.widget();
     let _ = general.widget();
+
+    let app = libadwaita::Application::new(
+        Some("com.github.danvincent.sway-config.test"),
+        Default::default(),
+    );
+    app.register(None::<&gtk4::gio::Cancellable>)
+        .expect("app register failed");
+
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let store = sway_config::config::store::SettingsStore::test_store(tmp.path());
+    let window = SwayConfigWindow::new(&app, store);
+    assert!(window.window().title().is_some());
 }
