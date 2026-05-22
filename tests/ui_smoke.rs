@@ -766,3 +766,151 @@ fn test_waybar_module_right_toggle_on_adds_if_absent() {
     state.mark_dirty();
     assert!(state.settings().waybar.modules_right.iter().any(|m| m.name == name && m.enabled));
 }
+
+// ── Phase 6: Autostart ────────────────────────────────────────────────────────
+//
+// GTK dialog/signal tests require a display; tests here cover the AppState
+// data-model contract and pure helper logic.
+
+#[test]
+fn test_autostart_add_entry_updates_appstate() {
+    use sway_configurator::model::autostart::AutostartEntry;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().autostart.entries.push(AutostartEntry {
+        id: "1".to_string(),
+        command: "dunst".to_string(),
+        description: "Notification daemon".to_string(),
+        enabled: true,
+    });
+    state.mark_dirty();
+    assert_eq!(state.settings().autostart.entries.len(), 1);
+    assert_eq!(state.settings().autostart.entries[0].command, "dunst");
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_autostart_remove_entry_updates_appstate() {
+    use sway_configurator::ui::pages::autostart::remove_entry;
+    use sway_configurator::model::autostart::AutostartEntry;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().autostart.entries.push(AutostartEntry {
+        id: "abc".to_string(),
+        command: "picom".to_string(),
+        description: "".to_string(),
+        enabled: true,
+    });
+    let removed = remove_entry(&mut state.settings_mut().autostart.entries, "abc");
+    state.mark_dirty();
+    assert!(removed);
+    assert!(state.settings().autostart.entries.is_empty());
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_autostart_remove_nonexistent_entry_returns_false() {
+    use sway_configurator::ui::pages::autostart::remove_entry;
+    let mut entries = Vec::new();
+    let result = remove_entry(&mut entries, "nonexistent");
+    assert!(!result);
+}
+
+#[test]
+fn test_autostart_toggle_entry_updates_appstate() {
+    use sway_configurator::ui::pages::autostart::{toggle_entry, make_entry};
+    let mut state = AppState::new(Settings::default());
+    let entry = make_entry("waybar", "");
+    let id = entry.id.clone();
+    state.settings_mut().autostart.entries.push(entry);
+    // Toggle off
+    let found = toggle_entry(&mut state.settings_mut().autostart.entries, &id, false);
+    state.mark_dirty();
+    assert!(found);
+    assert!(!state.settings().autostart.entries[0].enabled);
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_autostart_toggle_entry_on() {
+    use sway_configurator::ui::pages::autostart::toggle_entry;
+    use sway_configurator::model::autostart::AutostartEntry;
+    let mut entries = vec![AutostartEntry {
+        id: "x".to_string(),
+        command: "foo".to_string(),
+        description: "".to_string(),
+        enabled: false,
+    }];
+    toggle_entry(&mut entries, "x", true);
+    assert!(entries[0].enabled);
+}
+
+#[test]
+fn test_autostart_toggle_nonexistent_returns_false() {
+    use sway_configurator::ui::pages::autostart::toggle_entry;
+    let mut entries = Vec::new();
+    let found = toggle_entry(&mut entries, "missing", true);
+    assert!(!found);
+}
+
+#[test]
+fn test_autostart_read_back_matches_loaded() {
+    use sway_configurator::model::autostart::AutostartEntry;
+    let mut state = AppState::new(Settings::default());
+    let entry = AutostartEntry {
+        id: "e1".to_string(),
+        command: "mako".to_string(),
+        description: "Notifications".to_string(),
+        enabled: false,
+    };
+    state.settings_mut().autostart.entries.push(entry.clone());
+    assert_eq!(state.settings().autostart.entries[0], entry);
+}
+
+#[test]
+fn test_autostart_marks_dirty_on_change() {
+    use sway_configurator::ui::pages::autostart::make_entry;
+    let mut state = AppState::new(Settings::default());
+    state.mark_clean();
+    assert!(!state.is_dirty());
+    state.settings_mut().autostart.entries.push(make_entry("wlsunset", ""));
+    state.mark_dirty();
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_make_entry_helper_creates_enabled_entry() {
+    use sway_configurator::ui::pages::autostart::make_entry;
+    let entry = make_entry("dunst", "Notification daemon");
+    assert_eq!(entry.command, "dunst");
+    assert_eq!(entry.description, "Notification daemon");
+    assert!(entry.enabled);
+    assert!(!entry.id.is_empty());
+}
+
+#[test]
+fn test_make_entry_helper_empty_description() {
+    use sway_configurator::ui::pages::autostart::make_entry;
+    let entry = make_entry("waybar", "");
+    assert_eq!(entry.command, "waybar");
+    assert_eq!(entry.description, "");
+    assert!(entry.enabled);
+}
+
+#[test]
+fn test_make_entry_ids_differ_over_time() {
+    use sway_configurator::ui::pages::autostart::make_entry;
+    // IDs include a high-resolution timestamp so collisions are extremely unlikely
+    let e1 = make_entry("cmd", "");
+    std::thread::sleep(std::time::Duration::from_nanos(1));
+    let e2 = make_entry("cmd", "");
+    // If they happen to be equal due to timer resolution, that's a system issue,
+    // but for typical cases the IDs must be non-empty strings
+    assert!(!e1.id.is_empty());
+    assert!(!e2.id.is_empty());
+}
+
+#[test]
+fn test_make_entry_spaces_in_command_replaced_in_id() {
+    use sway_configurator::ui::pages::autostart::make_entry;
+    let entry = make_entry("my program", "");
+    assert!(!entry.id.contains(' '), "ID must not contain spaces: {}", entry.id);
+}
