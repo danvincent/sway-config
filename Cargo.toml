@@ -38,6 +38,18 @@ assets = [
   ["LICENSE", "usr/share/doc/sway-config/LICENSE", "644"],
 ]
 
+[package.metadata.generate-rpm]
+name = "sway-config"
+summary = "GTK4/libadwaita GUI for configuring Sway and Waybar"
+license = "MIT"
+assets = [
+  { source = "target/release/sway-config", dest = "/usr/bin/sway-config", mode = "755" },
+  { source = "packaging/sway-config.desktop", dest = "/usr/share/applications/sway-config.desktop", mode = "644" },
+  { source = "packaging/sway-config.svg", dest = "/usr/share/icons/hicolor/scalable/apps/sway-config.svg", mode = "644" },
+  { source = "README.md", dest = "/usr/share/doc/sway-config/README.md", mode = "644", doc = true },
+  { source = "LICENSE", dest = "/usr/share/doc/sway-config/LICENSE", mode = "644", doc = true },
+]
+
 [[test]]
 name = "model_roundtrip"
 path = "tests/model_roundtrip.rs"

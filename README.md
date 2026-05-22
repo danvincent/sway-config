@@ -89,16 +89,37 @@ Tests run without GTK — no system libraries required for the test suite:
 cargo test --no-default-features
 ```
 
-## Packaging (WIP)
+## Packaging
 
-Initial Debian packaging metadata is included via `cargo-deb`.
+This repository includes packaging support for Debian (`.deb`), Fedora/RHEL (`.rpm`), and Arch (PKGBUILD).
+
+### Debian package
 
 ```bash
-cargo install cargo-deb
-cargo deb
+cargo install cargo-deb --locked
+cargo build --release --locked
+cargo deb --no-build
 ```
 
-Generated package artifacts are placed in `target/debian/`.
+Artifacts: `target/debian/*.deb`
+
+### RPM package
+
+```bash
+cargo install cargo-generate-rpm --locked
+cargo build --release --locked
+cargo generate-rpm --auto-req
+```
+
+Artifacts: `target/generate-rpm/*.rpm`
+
+### Arch Linux package
+
+`packaging/PKGBUILD` is provided. Run `makepkg` in a directory that contains `PKGBUILD` and the source tarball `sway-config-<version>.tar.gz` (makepkg will unpack the tarball itself):
+
+```bash
+makepkg -si
+```
 
 ## Architecture
 

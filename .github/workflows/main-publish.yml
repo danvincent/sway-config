@@ -35,8 +35,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb --version 3.7.0 --locked
+      - name: Install packaging tools
+        run: |
+          sudo apt-get install -y rpm
+          cargo install cargo-deb --version 3.7.0 --locked
+          cargo install cargo-generate-rpm --version 0.15.2 --locked
 
       - name: Test (no GTK)
         run: cargo test --locked --no-default-features
@@ -52,15 +55,29 @@ jobs:
       - name: Build Debian package
         run: cargo deb --no-build
 
+      - name: Build RPM package
+        run: cargo generate-rpm --auto-req
+
+      - name: Prepare Arch package sources
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f2)
+          mkdir -p dist/arch
+          cp packaging/PKGBUILD dist/arch/
+          cp packaging/sway-config.desktop dist/arch/
+          cp packaging/sway-config.svg dist/arch/
+          git archive --format=tar.gz --prefix=sway-config-${VERSION}/ -o dist/arch/sway-config-${VERSION}.tar.gz HEAD
+
       - name: Collect artifacts
         run: |
           mkdir -p dist
           cp target/release/sway-config dist/
           cp target/debian/*.deb dist/
+          cp target/generate-rpm/*.rpm dist/
+          cp packaging/sway-config.spec dist/
 
       - name: Publish artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sway-config-main-${{ github.sha }}
-          path: dist/*
+          path: dist/**
           if-no-files-found: error
