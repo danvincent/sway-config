@@ -208,6 +208,202 @@ fn restart_waybar() -> bool {
         .unwrap_or(false)
 }
 
+/// Parse a theme .env file into a variable map.
+/// Lines of the form KEY="value" or KEY=value are returned as HashMap entries.
+pub fn parse_env_file(content: &str) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() { continue; }
+        if let Some((key, val)) = line.split_once('=') {
+            let key = key.trim().to_string();
+            let val = val.trim().trim_matches('"').to_string();
+            if !key.is_empty() {
+                map.insert(key, val);
+            }
+        }
+    }
+    map
+}
+
+/// Substitute `${TOKEN}` placeholders in a template string using the provided map.
+pub fn envsubst(template: &str, vars: &std::collections::HashMap<String, String>) -> String {
+    let mut result = template.to_string();
+    for (key, val) in vars {
+        result = result.replace(&format!("${{{}}}", key), val);
+    }
+    result
+}
+
+/// Apply a theme — writes sway colors, waybar style.css, GTK settings, wallpaper.
+///
+/// The theme `.env` file is parsed; overrides from `ThemeOverrides` are applied.
+/// Set `dry_run` to true to skip all writes and reloads.
+pub fn apply_theme(
+    selection: &crate::model::theme::ThemeSelection,
+    overrides: &crate::model::theme::ThemeOverrides,
+    base_path: &Path,
+    dry_run: bool,
+) -> ApplyResult {
+    let mut result = ApplyResult {
+        success: true,
+        files_written: Vec::new(),
+        errors: Vec::new(),
+        sway_reloaded: false,
+        waybar_restarted: false,
+    };
+
+    // Parse .env file
+    let env_content = match fs::read_to_string(&selection.path) {
+        Ok(c) => c,
+        Err(e) => {
+            result.success = false;
+            result.errors.push(format!("Cannot read theme file {}: {}", selection.path, e));
+            return result;
+        }
+    };
+
+    let mut vars = parse_env_file(&env_content);
+
+    // Apply overrides
+    if let Some(ref wp) = overrides.wallpaper { vars.insert("WALLPAPER_PATH".into(), wp.clone()); }
+    if let Some(ref ff) = overrides.font_family { vars.insert("FONT_FAMILY".into(), ff.clone()); }
+    if let Some(fs_) = overrides.font_size { vars.insert("FONT_SIZE".into(), fs_.to_string()); }
+    if let Some(gi) = overrides.gap_inner { vars.insert("GAP_INNER".into(), gi.to_string()); }
+    if let Some(go) = overrides.gap_outer { vars.insert("GAP_OUTER".into(), go.to_string()); }
+    if let Some(bw) = overrides.border_width { vars.insert("BORDER_WIDTH".into(), bw.to_string()); }
+    if let Some(wo) = overrides.waybar_opacity { vars.insert("WAYBAR_OPACITY".into(), format!("{:.2}", wo)); }
+    if let Some(to) = overrides.terminal_opacity { vars.insert("TERMINAL_OPACITY".into(), format!("{:.2}", to)); }
+
+    if dry_run {
+        result.files_written.push("(dry-run) sway colors, waybar style, gtk settings".into());
+        return result;
+    }
+
+    // Write ~/.config/sway-theme pointer
+    let sway_theme_ptr = dirs_or_home("sway-theme", base_path);
+    if let Err(e) = write_file(&sway_theme_ptr, &format!("{}\n", selection.path)) {
+        result.errors.push(format!("Failed to write sway-theme pointer: {}", e));
+    } else {
+        result.files_written.push(sway_theme_ptr.to_string_lossy().into());
+    }
+
+    // Write sway colors config
+    let colors_conf = build_sway_colors_conf(&vars);
+    let colors_path = base_path.join("sway/config.d/colors.conf");
+    match write_file(&colors_path, &colors_conf) {
+        Ok(_) => result.files_written.push(colors_path.to_string_lossy().into()),
+        Err(e) => result.errors.push(format!("Failed to write colors.conf: {}", e)),
+    }
+
+    // Write waybar style.css from bundled template
+    let waybar_css = envsubst(WAYBAR_STYLE_TEMPLATE, &vars);
+    let style_path = base_path.join("waybar/style.css");
+    match write_file(&style_path, &waybar_css) {
+        Ok(_) => result.files_written.push(style_path.to_string_lossy().into()),
+        Err(e) => result.errors.push(format!("Failed to write waybar style.css: {}", e)),
+    }
+
+    // Write GTK settings
+    let gtk_settings = build_gtk_settings(&vars);
+    for ver in &["gtk-3.0", "gtk-4.0"] {
+        let gtk_path = base_path.join(format!("{}/settings.ini", ver));
+        match write_file(&gtk_path, &gtk_settings) {
+            Ok(_) => result.files_written.push(gtk_path.to_string_lossy().into()),
+            Err(e) => result.errors.push(format!("Failed to write {}/settings.ini: {}", ver, e)),
+        }
+    }
+
+    // Set wallpaper via swaymsg
+    if let Some(wp) = vars.get("WALLPAPER_PATH").filter(|p| !p.is_empty()) {
+        let wp = wp.clone();
+        let _ = std::process::Command::new("swaymsg")
+            .args(["output", "*", "bg", &wp, "fill"])
+            .status();
+    }
+
+    result.success = result.errors.is_empty();
+
+    // Reload sway
+    if result.success {
+        result.sway_reloaded = reload_sway();
+    }
+
+    // Restart waybar
+    if result.success {
+        result.waybar_restarted = restart_waybar();
+    }
+
+    result
+}
+
+/// Resolve a path relative to $HOME/.config (not base_path, which is ~/.config in prod)
+fn dirs_or_home(name: &str, base_path: &Path) -> PathBuf {
+    // In tests base_path is a temp dir; in prod it is ~/.config
+    base_path.join(name)
+}
+
+/// Build sway client color directives from theme variables.
+fn build_sway_colors_conf(vars: &std::collections::HashMap<String, String>) -> String {
+    let get = |k: &str| vars.get(k).map(|s| s.as_str()).unwrap_or("#888888");
+
+    let base      = get("COLOR_BASE");
+    let text      = get("COLOR_TEXT");
+    let lavender  = get("COLOR_LAVENDER");
+    let overlay0  = get("COLOR_OVERLAY0");
+    let subtext0  = get("COLOR_SUBTEXT0");
+    let rosewater = get("COLOR_ROSEWATER");
+    let peach     = get("COLOR_PEACH");
+
+    format!(
+        "# Sway client colors — generated by sway-configurator\n\
+         client.focused           {lavender}  {base}  {text}     {rosewater} {lavender}\n\
+         client.focused_inactive  {overlay0}  {base}  {subtext0} {rosewater} {overlay0}\n\
+         client.unfocused         {overlay0}  {base}  {subtext0} {rosewater} {overlay0}\n\
+         client.urgent            {peach}     {base}  {peach}    {rosewater} {peach}\n\
+         \n\
+         # Gaps\n\
+         gaps inner {gap_inner}\n\
+         gaps outer {gap_outer}\n\
+         default_border pixel {border_width}\n",
+        lavender  = lavender,
+        base      = base,
+        text      = text,
+        rosewater = rosewater,
+        overlay0  = overlay0,
+        subtext0  = subtext0,
+        peach     = peach,
+        gap_inner  = vars.get("GAP_INNER").map(|s| s.as_str()).unwrap_or("5"),
+        gap_outer  = vars.get("GAP_OUTER").map(|s| s.as_str()).unwrap_or("5"),
+        border_width = vars.get("BORDER_WIDTH").map(|s| s.as_str()).unwrap_or("2"),
+    )
+}
+
+/// Build GTK settings.ini content from theme variables.
+fn build_gtk_settings(vars: &std::collections::HashMap<String, String>) -> String {
+    let theme  = vars.get("GTK_THEME_NAME").map(|s| s.as_str()).unwrap_or("Adwaita");
+    let icons  = vars.get("ICON_THEME").map(|s| s.as_str()).unwrap_or("Adwaita");
+    let font   = vars.get("FONT_FAMILY").map(|s| s.as_str()).unwrap_or("Sans");
+    let size   = vars.get("FONT_SIZE").map(|s| s.as_str()).unwrap_or("10");
+
+    format!(
+        "[Settings]\n\
+         gtk-theme-name={theme}\n\
+         gtk-icon-theme-name={icons}\n\
+         gtk-font-name={font} {size}\n\
+         gtk-cursor-theme-name=default\n\
+         gtk-cursor-theme-size=24\n\
+         gtk-xft-antialias=1\n\
+         gtk-xft-hinting=1\n\
+         gtk-xft-hintstyle=hintfull\n\
+         gtk-xft-rgba=rgb\n",
+        theme = theme, icons = icons, font = font, size = size,
+    )
+}
+
+/// Embedded waybar style.css template (tokens in ${VAR} form).
+const WAYBAR_STYLE_TEMPLATE: &str = include_str!("../assets/waybar_style.css.tmpl");
+
 #[cfg(test)]
 mod tests {
     use super::*;

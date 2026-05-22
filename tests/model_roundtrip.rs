@@ -19,6 +19,7 @@ fn test_settings_with_theme_serialization() {
     settings.theme = Some(ThemeSelection {
         name: "dark-theme".to_string(),
         source: "system".to_string(),
+        path: String::new(),
     });
     
     let toml_str = toml::to_string_pretty(&settings).expect("Failed to serialize settings");

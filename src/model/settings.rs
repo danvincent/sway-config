@@ -1,6 +1,6 @@
 /// Settings model - editable user configuration
 use serde::{Deserialize, Serialize};
-use crate::model::theme::ThemeSelection;
+use crate::model::theme::{ThemeSelection, ThemeOverrides};
 use crate::model::output::OutputConfig;
 use crate::model::input::{KeyboardConfig, TouchpadConfig};
 use crate::model::idle::IdleConfig;
@@ -14,6 +14,9 @@ use crate::model::general::GeneralConfig;
 pub struct Settings {
     /// Currently selected theme
     pub theme: Option<ThemeSelection>,
+    /// Overrides applied on top of the selected theme's .env values
+    #[serde(default)]
+    pub theme_overrides: ThemeOverrides,
     /// Output/display configurations
     pub outputs: Vec<OutputConfig>,
     /// Keyboard configurations

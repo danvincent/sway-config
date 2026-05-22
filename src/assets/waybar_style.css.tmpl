@@ -1,0 +1,157 @@
+/* Waybar style — generated from templates/waybar/style.css.tmpl
+   Catppuccin colors injected via envsubst from theme .env              */
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "${FONT_FAMILY}", "Font Awesome 6 Free";
+    font-size: ${FONT_SIZE}px;
+    min-height: 0;
+}
+
+window#waybar {
+    background-color: ${COLOR_BASE};
+    color: ${COLOR_TEXT};
+    opacity: ${WAYBAR_OPACITY};
+    transition-property: background-color;
+    transition-duration: 0.3s;
+}
+
+window#waybar.hidden {
+    opacity: 0.2;
+}
+
+#workspaces button {
+    padding: 0 8px;
+    background-color: transparent;
+    color: ${COLOR_SUBTEXT0};
+    border-bottom: 2px solid transparent;
+}
+
+#workspaces button:hover {
+    background: ${COLOR_SURFACE0};
+    color: ${COLOR_TEXT};
+}
+
+#workspaces button.focused {
+    color: ${COLOR_LAVENDER};
+    border-bottom: 2px solid ${COLOR_LAVENDER};
+}
+
+#workspaces button.urgent {
+    color: ${COLOR_RED};
+    border-bottom: 2px solid ${COLOR_RED};
+}
+
+#mode {
+    background-color: ${COLOR_SURFACE0};
+    color: ${COLOR_PEACH};
+    padding: 0 8px;
+}
+
+#custom-shortcuts {
+    background-color: ${COLOR_SURFACE0};
+    color: ${COLOR_YELLOW};
+    padding: 0 10px;
+}
+
+#clock,
+#battery,
+#cpu,
+#memory,
+#temperature,
+#backlight,
+#network,
+#pulseaudio,
+#tray,
+#scratchpad {
+    padding: 0 10px;
+    color: ${COLOR_TEXT};
+}
+
+#clock {
+    color: ${COLOR_BLUE};
+}
+
+#battery {
+    color: ${COLOR_GREEN};
+}
+
+#battery.charging {
+    color: ${COLOR_TEAL};
+}
+
+#battery.warning:not(.charging) {
+    color: ${COLOR_YELLOW};
+}
+
+#battery.critical:not(.charging) {
+    color: ${COLOR_RED};
+    animation-name: blink;
+    animation-duration: 0.5s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+@keyframes blink {
+    to {
+        color: ${COLOR_SURFACE2};
+    }
+}
+
+#cpu {
+    color: ${COLOR_SAPPHIRE};
+}
+
+#memory {
+    color: ${COLOR_MAUVE};
+}
+
+#temperature {
+    color: ${COLOR_TEAL};
+}
+
+#temperature.critical {
+    color: ${COLOR_RED};
+}
+
+#backlight {
+    color: ${COLOR_YELLOW};
+}
+
+#network {
+    color: ${COLOR_SKY};
+}
+
+#network.disconnected {
+    color: ${COLOR_RED};
+}
+
+#pulseaudio {
+    color: ${COLOR_FLAMINGO};
+}
+
+#pulseaudio.muted {
+    color: ${COLOR_OVERLAY0};
+}
+
+#tray {
+    color: ${COLOR_SUBTEXT1};
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: ${COLOR_SURFACE0};
+}
+
+tooltip {
+    background-color: ${COLOR_MANTLE};
+    border: 1px solid ${COLOR_SURFACE1};
+    border-radius: 6px;
+    color: ${COLOR_TEXT};
+}

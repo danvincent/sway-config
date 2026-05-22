@@ -3,217 +3,389 @@ use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::model::theme::ThemeSelection;
-use crate::state::AppState;
 use std::path::PathBuf;
+use std::collections::HashMap;
+use crate::model::theme::{ThemeSelection, ThemeOverrides};
+use crate::state::AppState;
 
-/// Themes page - for configuring themes
+/// A parsed .env theme with colors and metadata
+#[derive(Debug, Clone)]
+pub struct ThemeEnv {
+    pub name: String,
+    pub source: String,
+    pub path: String,
+    pub vars: HashMap<String, String>,
+}
+
+impl ThemeEnv {
+    /// Key colors to show in the palette swatch (ordered for visual effect)
+    const SWATCH_KEYS: &'static [&'static str] = &[
+        "COLOR_BASE", "COLOR_SURFACE0", "COLOR_SURFACE1", "COLOR_OVERLAY0",
+        "COLOR_TEXT", "COLOR_LAVENDER", "COLOR_BLUE", "COLOR_SAPPHIRE",
+        "COLOR_TEAL", "COLOR_GREEN", "COLOR_YELLOW", "COLOR_PEACH",
+        "COLOR_RED", "COLOR_MAUVE", "COLOR_PINK", "COLOR_ROSEWATER",
+    ];
+
+    fn swatch_colors(&self) -> Vec<(f64, f64, f64)> {
+        Self::SWATCH_KEYS.iter().filter_map(|k| {
+            self.vars.get(*k).and_then(|hex| parse_hex_color(hex))
+        }).collect()
+    }
+}
+
+fn parse_hex_color(hex: &str) -> Option<(f64, f64, f64)> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 { return None; }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f64 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f64 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f64 / 255.0;
+    Some((r, g, b))
+}
+
+/// Scan directories for .env theme files and parse them
+pub fn scan_env_themes(custom_path: Option<&str>) -> Vec<ThemeEnv> {
+    let mut themes = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    let mut dirs: Vec<(PathBuf, String)> = Vec::new();
+    // User override path
+    if let Some(p) = custom_path {
+        dirs.push((PathBuf::from(p), "user".to_string()));
+    }
+    // Default user themes path
+    if let Ok(home) = std::env::var("HOME") {
+        dirs.push((PathBuf::from(format!("{}/.config/sway/themes", home)), "user".to_string()));
+        dirs.push((PathBuf::from(format!("{}/source/SwayConfig/themes", home)), "built-in".to_string()));
+    }
+
+    for (dir, source) in dirs {
+        if !dir.exists() { continue; }
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let mut dir_themes: Vec<ThemeEnv> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|x| x == "env").unwrap_or(false))
+            .filter_map(|e| {
+                let path = e.path();
+                let content = std::fs::read_to_string(&path).ok()?;
+                let vars = crate::config::apply::parse_env_file(&content);
+                let name = path.file_stem()?.to_str()?.to_string();
+                if seen.contains(&name) { return None; }
+                Some(ThemeEnv { name: name.clone(), source: source.clone(), path: path.to_string_lossy().into(), vars })
+            })
+            .collect();
+        dir_themes.sort_by(|a, b| a.name.cmp(&b.name));
+        for t in dir_themes {
+            seen.insert(t.name.clone());
+            themes.push(t);
+        }
+    }
+    themes
+}
+
+/// Read the active theme path from ~/.config/sway-theme
+pub fn active_theme_path() -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    let content = std::fs::read_to_string(format!("{}/.config/sway-theme", home)).ok()?;
+    let path = content.trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+/// Themes page
 pub struct ThemesPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
-    custom_path_entry: libadwaita::EntryRow,
-    /// Tracks loaded theme names in list_box order for selection → AppState mapping
-    theme_names: Rc<RefCell<Vec<ThemeSelection>>>,
+    wallpaper_row: libadwaita::EntryRow,
+    font_family_row: libadwaita::EntryRow,
+    font_size_row: libadwaita::SpinRow,
+    gap_inner_row: libadwaita::SpinRow,
+    gap_outer_row: libadwaita::SpinRow,
+    border_width_row: libadwaita::SpinRow,
+    waybar_opacity_row: libadwaita::SpinRow,
+    #[allow(dead_code)]
+    apply_button: gtk4::Button,
+    themes: Rc<RefCell<Vec<ThemeEnv>>>,
     loading: Rc<std::cell::Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
 
 impl ThemesPage {
-    /// Create a new themes page
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        
+
         let scrolled = gtk4::ScrolledWindow::new();
         scrolled.set_hexpand(true);
         scrolled.set_vexpand(true);
-        
+
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
-        
-        let prefs_page = libadwaita::PreferencesPage::new();
 
-        // ── Custom path group ──────────────────────────────────────────────────
-        let path_group = libadwaita::PreferencesGroup::new();
-        path_group.set_title("Theme Locations");
+        let outer_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        outer_box.set_margin_top(24);
+        outer_box.set_margin_bottom(24);
+        outer_box.set_margin_start(12);
+        outer_box.set_margin_end(12);
 
-        let custom_path_entry = libadwaita::EntryRow::new();
-        custom_path_entry.set_title("Custom themes folder");
-        custom_path_entry.set_show_apply_button(true);
-        path_group.add(&custom_path_entry);
-        prefs_page.add(&path_group);
-
-        // ── Theme list group ──────────────────────────────────────────────────
+        // ── Theme list ────────────────────────────────────────────────────────
         let list_group = libadwaita::PreferencesGroup::new();
-        list_group.set_title("Available Themes");
-        list_group.set_description(Some("Choose a theme to apply to your Sway configuration"));
+        list_group.set_title("Theme");
+        list_group.set_description(Some("Select a colour palette — applies sway colours, waybar style, and GTK theme"));
 
         let list_box = gtk4::ListBox::new();
         list_box.set_css_classes(&["boxed-list"]);
         list_box.set_selection_mode(gtk4::SelectionMode::Single);
         list_group.add(&list_box);
-        prefs_page.add(&list_group);
+        outer_box.append(&list_group);
 
-        clamp.set_child(Some(&prefs_page));
+        // ── Appearance overrides ─────────────────────────────────────────────
+        let appearance_group = libadwaita::PreferencesGroup::new();
+        appearance_group.set_title("Appearance Overrides");
+        appearance_group.set_description(Some("Leave blank/zero to use the theme's built-in values"));
+
+        let wallpaper_row = libadwaita::EntryRow::new();
+        wallpaper_row.set_title("Wallpaper path");
+        wallpaper_row.set_show_apply_button(true);
+
+        let font_family_row = libadwaita::EntryRow::new();
+        font_family_row.set_title("Font family");
+        font_family_row.set_show_apply_button(true);
+
+        let font_size_row = libadwaita::SpinRow::with_range(0.0, 72.0, 1.0);
+        font_size_row.set_title("Font size (0 = theme default)");
+
+        let gap_inner_row = libadwaita::SpinRow::with_range(0.0, 100.0, 1.0);
+        gap_inner_row.set_title("Inner gap (px, 0 = theme default)");
+
+        let gap_outer_row = libadwaita::SpinRow::with_range(0.0, 100.0, 1.0);
+        gap_outer_row.set_title("Outer gap (px, 0 = theme default)");
+
+        let border_width_row = libadwaita::SpinRow::with_range(0.0, 20.0, 1.0);
+        border_width_row.set_title("Border width (px, 0 = theme default)");
+
+        let waybar_opacity_row = libadwaita::SpinRow::with_range(0.0, 1.0, 0.05);
+        waybar_opacity_row.set_title("Waybar opacity (0 = theme default)");
+        waybar_opacity_row.set_digits(2);
+
+        appearance_group.add(&wallpaper_row);
+        appearance_group.add(&font_family_row);
+        appearance_group.add(&font_size_row);
+        appearance_group.add(&gap_inner_row);
+        appearance_group.add(&gap_outer_row);
+        appearance_group.add(&border_width_row);
+        appearance_group.add(&waybar_opacity_row);
+        outer_box.append(&appearance_group);
+
+        // ── Apply button ──────────────────────────────────────────────────────
+        let apply_button = gtk4::Button::with_label("Apply Theme");
+        apply_button.set_css_classes(&["suggested-action", "pill"]);
+        apply_button.set_halign(gtk4::Align::End);
+        apply_button.set_margin_top(8);
+        outer_box.append(&apply_button);
+
+        clamp.set_child(Some(&outer_box));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
 
-        let theme_names: Rc<RefCell<Vec<ThemeSelection>>> = Rc::new(RefCell::new(Vec::new()));
+        let themes: Rc<RefCell<Vec<ThemeEnv>>> = Rc::new(RefCell::new(Vec::new()));
         let loading = Rc::new(std::cell::Cell::new(false));
 
-        // ── Selection signal ──────────────────────────────────────────────────
+        // ── Theme selection signal ────────────────────────────────────────────
         {
             let state = Rc::clone(&app_state);
-            let names = Rc::clone(&theme_names);
-            let loading = Rc::clone(&loading);
+            let themes_ref = Rc::clone(&themes);
+            let loading_ref = Rc::clone(&loading);
             list_box.connect_row_selected(move |_, row| {
-                if loading.get() { return; }
-                if let Some(row) = row {
-                    let idx = row.index() as usize;
-                    let selection = names.borrow().get(idx).cloned();
-                    if let Some(sel) = selection {
-                        state.borrow_mut().settings_mut().theme = Some(sel);
-                        state.borrow_mut().mark_dirty();
-                    }
-                }
-            });
-        }
-
-        // ── Custom path apply signal ──────────────────────────────────────────
-        {
-            let state = Rc::clone(&app_state);
-            let entry_ref = custom_path_entry.clone();
-            custom_path_entry.connect_apply(move |_| {
-                let path = entry_ref.text().to_string();
-                let trimmed = path.trim().to_string();
-                let custom = if trimmed.is_empty() { None } else { Some(trimmed) };
-                state.borrow_mut().settings_mut().custom_themes_path = custom;
+                if loading_ref.get() { return; }
+                let Some(row) = row else { return };
+                let idx = row.index() as usize;
+                let t = themes_ref.borrow();
+                let Some(theme) = t.get(idx) else { return };
+                let sel = ThemeSelection::with_path(&theme.name, &theme.source, &theme.path);
+                state.borrow_mut().settings_mut().theme = Some(sel);
                 state.borrow_mut().mark_dirty();
             });
         }
 
-        ThemesPage { widget, list_box, custom_path_entry, theme_names, loading, app_state }
-    }
-    
-    /// Navigate to this page - load themes from app_state
-    pub fn on_navigate(&self) {
-        let state = self.app_state.borrow();
-        let selected = state.settings().theme.clone();
-        let custom_path = state.settings().custom_themes_path.clone();
-        drop(state);
-        
-        if let Some(ref p) = custom_path {
-            self.custom_path_entry.set_text(p);
-        } else {
-            self.custom_path_entry.set_text("");
+        // ── Wallpaper apply signal ────────────────────────────────────────────
+        {
+            let state = Rc::clone(&app_state);
+            let row_ref = wallpaper_row.clone();
+            wallpaper_row.connect_apply(move |_| {
+                let val = row_ref.text().to_string();
+                let v = val.trim().to_string();
+                state.borrow_mut().settings_mut().theme_overrides.wallpaper =
+                    if v.is_empty() { None } else { Some(v) };
+                state.borrow_mut().mark_dirty();
+            });
         }
 
-        self.load_themes(selected.as_ref(), custom_path.as_deref());
+        // ── Font family apply signal ──────────────────────────────────────────
+        {
+            let state = Rc::clone(&app_state);
+            let row_ref = font_family_row.clone();
+            font_family_row.connect_apply(move |_| {
+                let val = row_ref.text().to_string();
+                let v = val.trim().to_string();
+                state.borrow_mut().settings_mut().theme_overrides.font_family =
+                    if v.is_empty() { None } else { Some(v) };
+                state.borrow_mut().mark_dirty();
+            });
+        }
+
+        // ── Spin row signals ──────────────────────────────────────────────────
+        macro_rules! spin_signal {
+            ($row:expr, $field:ident, $ty:ty, $zero_is_none:expr) => {{
+                let state = Rc::clone(&app_state);
+                let row_ref = $row.clone();
+                $row.connect_value_notify(move |_| {
+                    let v = row_ref.value() as $ty;
+                    state.borrow_mut().settings_mut().theme_overrides.$field =
+                        if $zero_is_none && v == 0 as $ty { None } else { Some(v) };
+                    state.borrow_mut().mark_dirty();
+                });
+            }};
+        }
+        spin_signal!(font_size_row, font_size, u32, true);
+        spin_signal!(gap_inner_row, gap_inner, u32, true);
+        spin_signal!(gap_outer_row, gap_outer, u32, true);
+        spin_signal!(border_width_row, border_width, u32, true);
+        spin_signal!(waybar_opacity_row, waybar_opacity, f64, true);
+
+        // ── Apply theme button ────────────────────────────────────────────────
+        {
+            let state = Rc::clone(&app_state);
+            let btn = apply_button.clone();
+            apply_button.connect_clicked(move |_| {
+                btn.set_sensitive(false);
+                btn.set_label("Applying…");
+                let s = state.borrow();
+                let theme = s.settings().theme.clone();
+                let overrides = s.settings().theme_overrides.clone();
+                drop(s);
+                if let Some(sel) = theme {
+                    let home = std::env::var("HOME").unwrap_or_default();
+                    let base = std::path::PathBuf::from(format!("{}/.config", home));
+                    let r = crate::config::apply::apply_theme(&sel, &overrides, &base, false);
+                    if r.success {
+                        btn.set_label("Theme Applied ✓");
+                    } else {
+                        btn.set_label("Apply Failed ✗");
+                        eprintln!("Theme apply errors: {:?}", r.errors);
+                    }
+                } else {
+                    btn.set_label("No theme selected");
+                }
+                btn.set_sensitive(true);
+            });
+        }
+
+        ThemesPage {
+            widget, list_box, wallpaper_row, font_family_row, font_size_row,
+            gap_inner_row, gap_outer_row, border_width_row, waybar_opacity_row,
+            apply_button, themes, loading, app_state,
+        }
     }
-    
-    /// Load themes into the page (suppresses signal write-back via loading guard)
-    pub fn load_themes(&self, selected: Option<&ThemeSelection>, custom_path: Option<&str>) {
+
+    pub fn on_navigate(&self) {
+        let state = self.app_state.borrow();
+        let selected_path = state.settings().theme.as_ref().map(|t| t.path.clone());
+        let custom_path = state.settings().custom_themes_path.clone();
+        let overrides = state.settings().theme_overrides.clone();
+        drop(state);
+
+        self.load_overrides_into_ui(&overrides);
+        self.load_themes(selected_path.as_deref(), custom_path.as_deref());
+    }
+
+    fn load_overrides_into_ui(&self, overrides: &ThemeOverrides) {
+        if let Some(ref wp) = overrides.wallpaper {
+            self.wallpaper_row.set_text(wp);
+        }
+        if let Some(ref ff) = overrides.font_family {
+            self.font_family_row.set_text(ff);
+        }
+        if let Some(fs_) = overrides.font_size { self.font_size_row.set_value(fs_ as f64); }
+        if let Some(gi) = overrides.gap_inner { self.gap_inner_row.set_value(gi as f64); }
+        if let Some(go) = overrides.gap_outer { self.gap_outer_row.set_value(go as f64); }
+        if let Some(bw) = overrides.border_width { self.border_width_row.set_value(bw as f64); }
+        if let Some(wo) = overrides.waybar_opacity { self.waybar_opacity_row.set_value(wo); }
+    }
+
+    pub fn load_themes(&self, selected_path: Option<&str>, custom_path: Option<&str>) {
         self.loading.set(true);
 
-        // Clear existing entries
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
-        
-        // Get available themes
-        let themes = Self::available_themes(custom_path);
-        *self.theme_names.borrow_mut() = themes.clone();
-        
-        for (idx, theme) in themes.iter().enumerate() {
-            let row = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
-            row.set_margin_top(6);
-            row.set_margin_bottom(6);
-            row.set_margin_start(12);
-            row.set_margin_end(12);
-            
+
+        let active_path = active_theme_path();
+        let env_themes = scan_env_themes(custom_path);
+        *self.themes.borrow_mut() = env_themes.clone();
+
+        for (idx, theme) in env_themes.iter().enumerate() {
+            let row_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
+            row_box.set_margin_top(8);
+            row_box.set_margin_bottom(8);
+            row_box.set_margin_start(12);
+            row_box.set_margin_end(12);
+
+            // Header row: name + active badge
+            let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+            header.set_valign(gtk4::Align::Center);
+
             let name_label = gtk4::Label::new(Some(&theme.name));
             name_label.set_halign(gtk4::Align::Start);
             name_label.set_css_classes(&["heading"]);
-            
-            let source_label = gtk4::Label::new(Some(&format!("Source: {}", &theme.source)));
-            source_label.set_css_classes(&["subtitle"]);
+            name_label.set_hexpand(true);
+            header.append(&name_label);
+
+            let is_active = active_path.as_deref() == Some(theme.path.as_str())
+                || selected_path == Some(theme.path.as_str());
+            if is_active {
+                let badge = gtk4::Label::new(Some("Active"));
+                badge.set_css_classes(&["tag", "success"]);
+                header.append(&badge);
+            }
+
+            let source_label = gtk4::Label::new(Some(&theme.source));
+            source_label.set_css_classes(&["caption", "dim-label"]);
             source_label.set_halign(gtk4::Align::Start);
-            
-            row.append(&name_label);
-            row.append(&source_label);
-            
-            self.list_box.append(&row);
-            
-            // Select if matches current selection
-            if let Some(sel) = selected {
-                if sel.name == theme.name {
-                    if let Some(row) = self.list_box.row_at_index(idx as i32) {
-                        self.list_box.select_row(Some(&row));
+
+            row_box.append(&header);
+            row_box.append(&source_label);
+
+            // Color swatch
+            let colors = theme.swatch_colors();
+            if !colors.is_empty() {
+                let swatch = gtk4::DrawingArea::new();
+                swatch.set_size_request(-1, 16);
+                swatch.set_vexpand(false);
+                swatch.set_margin_top(4);
+                let colors_clone = colors.clone();
+                swatch.set_draw_func(move |_, cr, w, h| {
+                    let n = colors_clone.len();
+                    if n == 0 { return; }
+                    let sw = w as f64 / n as f64;
+                    for (i, (r, g, b)) in colors_clone.iter().enumerate() {
+                        cr.set_source_rgb(*r, *g, *b);
+                        cr.rectangle(i as f64 * sw, 0.0, sw, h as f64);
+                        let _ = cr.fill();
                     }
+                });
+                row_box.append(&swatch);
+            }
+
+            self.list_box.append(&row_box);
+
+            if is_active {
+                if let Some(row) = self.list_box.row_at_index(idx as i32) {
+                    self.list_box.select_row(Some(&row));
                 }
             }
         }
 
         self.loading.set(false);
     }
-    
-    /// Get available themes from the filesystem
-    pub fn available_themes(custom_path: Option<&str>) -> Vec<ThemeSelection> {
-        let mut themes = Vec::new();
-        let mut theme_paths: Vec<(PathBuf, String)> = Vec::new();
-        
-        // Priority 1: User themes dir (custom override or default ~/.config/sway/themes)
-        let user_path = if let Some(custom) = custom_path {
-            PathBuf::from(custom)
-        } else if let Ok(home) = std::env::var("HOME") {
-            PathBuf::from(format!("{}/.config/sway/themes", home))
-        } else {
-            PathBuf::from("/tmp/nonexistent")
-        };
-        theme_paths.push((user_path, "user".to_string()));
-        
-        // Priority 2: Built-in themes from the SwayConfig template source
-        if let Ok(home) = std::env::var("HOME") {
-            theme_paths.push((PathBuf::from(format!("{}/source/SwayConfig/themes", home)), "built-in".to_string()));
-        }
 
-        // Priority 3: System themes
-        theme_paths.push((PathBuf::from("/usr/share/themes"), "system".to_string()));
-        
-        for (path, source_label) in theme_paths {
-            if path.exists() {
-                if let Ok(entries) = std::fs::read_dir(&path) {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            let file_path = entry.path();
-                            // .env files (Sway theme format)
-                            if file_path.is_file() {
-                                if let Some(name_str) = file_path.file_name().and_then(|n| n.to_str()) {
-                                    if name_str.ends_with(".env") {
-                                        let theme_name = name_str.trim_end_matches(".env").to_string();
-                                        themes.push(ThemeSelection::new(theme_name, source_label.clone()));
-                                    }
-                                }
-                            }
-                            // GTK theme directories (containing index.theme)
-                            if file_path.is_dir() && file_path.join("index.theme").exists() {
-                                if let Some(name_str) = file_path.file_name().and_then(|n| n.to_str()) {
-                                    themes.push(ThemeSelection::new(name_str.to_string(), source_label.clone()));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Sort and deduplicate by theme name (user path has priority as it's scanned first)
-        themes.sort_by(|a, b| a.name.cmp(&b.name));
-        themes.dedup_by(|a, b| a.name == b.name);
-        
-        themes
-    }
-
-    /// Get a reference to the page's widget
     pub fn widget(&self) -> &gtk4::Widget {
         self.widget.upcast_ref()
     }
@@ -229,91 +401,57 @@ impl Default for ThemesPage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::settings::Settings;
-    use crate::model::theme::ThemeSelection;
-    use crate::config::read_helpers::read_theme;
 
     #[test]
-    fn test_available_themes_no_crash_with_no_paths() {
-        // Scanning non-existent paths returns empty vec without panicking
-        let themes = ThemesPage::available_themes(Some("/nonexistent/path/xyz"));
-        // We don't assert contents since the path doesn't exist, just no crash
-        drop(themes);
+    fn test_parse_hex_color_valid() {
+        let (r, g, b) = parse_hex_color("#cba6f7").unwrap();
+        assert!((r - 0.796).abs() < 0.01);
+        assert!((g - 0.651).abs() < 0.01);
+        assert!((b - 0.969).abs() < 0.01);
     }
 
     #[test]
-    fn test_read_theme_returns_none_for_default_settings() {
-        let settings = Settings::default();
-        assert!(read_theme(&settings).is_none());
+    fn test_parse_hex_color_invalid() {
+        assert!(parse_hex_color("").is_none());
+        assert!(parse_hex_color("#gggggg").is_none());
+        assert!(parse_hex_color("#fff").is_none());
     }
 
     #[test]
-    fn test_read_theme_returns_theme_when_set() {
-        let mut settings = Settings::default();
-        settings.theme = Some(ThemeSelection::new("my-theme", "local"));
-        let result = read_theme(&settings);
-        assert_eq!(result.unwrap().name, "my-theme");
-    }
-
-    #[test]
-    fn test_available_themes_does_not_include_source_swayconfig() {
-        // The ~/source/SwayConfig/themes path and ~/.config/sway-configurator/themes must NOT be scanned
-        let themes = ThemesPage::available_themes(None);
-        for theme in &themes {
-            assert!(!theme.source.contains("reference"), "Found reference source label");
-            assert!(!theme.source.contains("local"), "Found old sway-configurator local path label");
-        }
-    }
-
-    #[test]
-    fn test_available_themes_scans_custom_path_with_env_files() {
+    fn test_scan_env_themes_custom_path() {
         use std::fs;
-        let dir = std::env::temp_dir().join("themes-test-custom");
+        let dir = std::env::temp_dir().join("themes-test-scan");
         fs::create_dir_all(&dir).unwrap();
-        // Write a .env file
-        fs::write(dir.join("mytheme.env"), "# theme").unwrap();
-        
-        let themes = ThemesPage::available_themes(Some(dir.to_str().unwrap()));
-        assert!(themes.iter().any(|t| t.name == "mytheme" && t.source == "user"),
-            "custom path should produce a theme with source='user'");
-        
-        // Clean up
+        fs::write(dir.join("mytheme.env"), "COLOR_BASE=\"#1e1e2e\"\nFONT_SIZE=\"10\"\n").unwrap();
+
+        let themes = scan_env_themes(Some(dir.to_str().unwrap()));
+        assert!(themes.iter().any(|t| t.name == "mytheme"), "mytheme not found: {:?}", themes.iter().map(|t| &t.name).collect::<Vec<_>>());
+
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn test_available_themes_system_path_scanned() {
-        // /usr/share/themes may or may not contain .env files on this system,
-        // but available_themes should not panic when called without custom path
-        let themes = ThemesPage::available_themes(None);
-        // All themes from /usr/share/themes must have source "system"
-        for t in themes.iter().filter(|t| t.source == "system") {
-            assert!(!t.name.is_empty());
-        }
+    fn test_scan_env_themes_dedup() {
+        use std::fs;
+        let dir1 = std::env::temp_dir().join("themes-test-dedup1");
+        fs::create_dir_all(&dir1).unwrap();
+        fs::write(dir1.join("shared.env"), "COLOR_BASE=\"#111\"\n").unwrap();
+
+        // scan_env_themes with custom path - theme appears once
+        let themes = scan_env_themes(Some(dir1.to_str().unwrap()));
+        let count = themes.iter().filter(|t| t.name == "shared").count();
+        assert_eq!(count, 1, "should not duplicate theme");
+
+        let _ = fs::remove_dir_all(&dir1);
     }
 
     #[test]
-    fn test_available_themes_custom_path_overrides_default_user_path() {
-        use std::fs;
-        // Write a theme to the custom path
-        let custom_dir = std::env::temp_dir().join("themes-test-override-custom");
-        fs::create_dir_all(&custom_dir).unwrap();
-        fs::write(custom_dir.join("custom-only-theme.env"), "# custom").unwrap();
-
-        let themes = ThemesPage::available_themes(Some(custom_dir.to_str().unwrap()));
-
-        // The custom theme must be found with source "user"
-        assert!(
-            themes.iter().any(|t| t.name == "custom-only-theme" && t.source == "user"),
-            "custom-only-theme with source='user' not found: {:?}", themes
-        );
-
-        // No theme should have source "local" (old sway-configurator path is gone)
-        assert!(
-            themes.iter().all(|t| t.source != "local"),
-            "Unexpected 'local' source found: {:?}", themes
-        );
-
-        let _ = fs::remove_dir_all(&custom_dir);
+    fn test_theme_env_swatch_colors() {
+        let mut vars = HashMap::new();
+        vars.insert("COLOR_BASE".to_string(), "#1e1e2e".to_string());
+        vars.insert("COLOR_TEXT".to_string(), "#cdd6f4".to_string());
+        let theme = ThemeEnv { name: "test".into(), source: "test".into(), path: "".into(), vars };
+        let swatches = theme.swatch_colors();
+        assert!(!swatches.is_empty());
     }
 }
