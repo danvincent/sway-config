@@ -1,0 +1,36 @@
+/// Pages module - UI pages for different configuration sections
+#[cfg(feature = "gtk")]
+pub mod outputs;
+#[cfg(feature = "gtk")]
+pub mod inputs;
+#[cfg(feature = "gtk")]
+pub mod idle;
+#[cfg(feature = "gtk")]
+pub mod waybar;
+#[cfg(feature = "gtk")]
+pub mod autostart;
+#[cfg(feature = "gtk")]
+pub mod notifications;
+#[cfg(feature = "gtk")]
+pub mod themes;
+
+#[cfg(feature = "gtk")]
+pub use outputs::OutputsPage;
+#[cfg(feature = "gtk")]
+pub use inputs::InputsPage;
+#[cfg(feature = "gtk")]
+pub use idle::IdlePage;
+#[cfg(feature = "gtk")]
+pub use waybar::WaybarPage;
+#[cfg(feature = "gtk")]
+pub use autostart::AutostartPage;
+#[cfg(feature = "gtk")]
+pub use notifications::NotificationsPage;
+#[cfg(feature = "gtk")]
+pub use themes::ThemesPage;
+
+/// Returns page IDs in sidebar display order.
+/// This function is not gated by cfg so tests can call it without GTK.
+pub fn page_ids() -> &'static [&'static str] {
+    &["outputs", "inputs", "idle", "waybar", "autostart", "notifications", "themes"]
+}
