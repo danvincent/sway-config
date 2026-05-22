@@ -595,28 +595,15 @@ fn build_qtct_settings(
         .get("ICON_THEME")
         .map(|s| s.as_str())
         .unwrap_or("Adwaita");
-    let font = vars
-        .get("FONT_FAMILY")
-        .map(|s| s.as_str())
-        .unwrap_or("Sans");
-    let size = vars.get("FONT_SIZE").map(|s| s.as_str()).unwrap_or("10");
-    let qt_font = format!("{font},{size},-1,5,50,0,0,0,0,0");
-
     format!(
         "[Appearance]\n\
          color_scheme_path={color_scheme_path}\n\
          custom_palette=true\n\
          icon_theme={icons}\n\
          standard_dialogs=default\n\
-         style=Fusion\n\
-         \n\
-         [Fonts]\n\
-         general={qt_font}\n\
-         fixed=\"monospace,{size},-1,5,50,0,0,0,0,0\"\n",
+         style=Fusion\n",
         color_scheme_path = color_scheme_path.to_string_lossy(),
         icons = icons,
-        qt_font = qt_font,
-        size = size,
     )
 }
 
@@ -797,12 +784,9 @@ mod tests {
     fn test_build_qtct_settings_uses_theme_vars() {
         let mut vars = std::collections::HashMap::new();
         vars.insert("ICON_THEME".to_string(), "Papirus".to_string());
-        vars.insert("FONT_FAMILY".to_string(), "Inter".to_string());
-        vars.insert("FONT_SIZE".to_string(), "11".to_string());
 
         let conf = build_qtct_settings(&vars, Path::new("/tmp/sway-config.conf"));
         assert!(conf.contains("icon_theme=Papirus"));
-        assert!(conf.contains("general=Inter,11,-1,5,50,0,0,0,0,0"));
         assert!(conf.contains("custom_palette=true"));
     }
 
