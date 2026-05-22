@@ -62,6 +62,7 @@ pub struct NotificationsPage {
     follow_focus_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    no_daemon_banner: libadwaita::ActionRow,
     loading: Rc<Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
@@ -113,7 +114,14 @@ impl NotificationsPage {
         
         prefs_page.add(&preferences_group);
         
+        // Banner: created once, shown/hidden via set_visible() — never rebuilt.
         let banner_group = libadwaita::PreferencesGroup::new();
+        let no_daemon_banner = libadwaita::ActionRow::new();
+        no_daemon_banner.set_title("Warning: No notification daemon found");
+        no_daemon_banner.set_subtitle("Install dunst, mako, or swaync to enable notifications");
+        banner_group.add(&no_daemon_banner);
+        no_daemon_banner.set_visible(false);
+        banner_group.set_visible(false);
         prefs_page.add(&banner_group);
         
         clamp.set_child(Some(&prefs_page));
@@ -170,6 +178,7 @@ impl NotificationsPage {
             follow_focus_switch,
             preferences_group,
             banner_group,
+            no_daemon_banner,
             loading,
             app_state,
         }
@@ -196,20 +205,9 @@ impl NotificationsPage {
     
     /// Bind feature detection and show warnings if needed
     pub fn bind_detection(&self, has_daemon: bool) {
-        while let Some(child) = self.banner_group.first_child() {
-            self.banner_group.remove(&child);
-        }
-        
-        if !has_daemon {
-            self.preferences_group.set_sensitive(false);
-            
-            let banner = libadwaita::ActionRow::new();
-            banner.set_title("Warning: No notification daemon found");
-            banner.set_subtitle("Install dunst, mako, or swaync to enable notifications");
-            self.banner_group.add(&banner);
-        } else {
-            self.preferences_group.set_sensitive(true);
-        }
+        self.no_daemon_banner.set_visible(!has_daemon);
+        self.banner_group.set_visible(!has_daemon);
+        self.preferences_group.set_sensitive(has_daemon);
     }
 
     /// Get a reference to the page's widget

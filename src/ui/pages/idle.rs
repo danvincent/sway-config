@@ -15,6 +15,8 @@ pub struct IdlePage {
     before_sleep_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    swayidle_banner: libadwaita::ActionRow,
+    locker_banner: libadwaita::ActionRow,
     loading: Rc<Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
@@ -66,8 +68,21 @@ impl IdlePage {
         
         prefs_page.add(&preferences_group);
         
-        // Banner group for warnings (starts empty, will be populated by bind_detection)
+        // Banner group: rows created once, shown/hidden via set_visible() — never rebuilt.
+        // (Rebuilding by calling first_child()+remove() on PreferencesGroup is not supported;
+        //  first_child() returns an internal GtkBox, not your rows.)
         let banner_group = libadwaita::PreferencesGroup::new();
+        let swayidle_banner = libadwaita::ActionRow::new();
+        swayidle_banner.set_title("Warning: swayidle not found");
+        swayidle_banner.set_subtitle("Install swayidle to use idle locking");
+        let locker_banner = libadwaita::ActionRow::new();
+        locker_banner.set_title("Warning: No screen locker found");
+        locker_banner.set_subtitle("Install swaylock or waylock");
+        banner_group.add(&swayidle_banner);
+        banner_group.add(&locker_banner);
+        swayidle_banner.set_visible(false);
+        locker_banner.set_visible(false);
+        banner_group.set_visible(false);
         prefs_page.add(&banner_group);
         
         clamp.set_child(Some(&prefs_page));
@@ -123,6 +138,8 @@ impl IdlePage {
             before_sleep_switch,
             preferences_group,
             banner_group,
+            swayidle_banner,
+            locker_banner,
             loading,
             app_state,
         }
@@ -150,28 +167,11 @@ impl IdlePage {
     
     /// Bind feature detection and show warnings if needed
     pub fn bind_detection(&self, has_swayidle: bool, has_locker: bool) {
-        while let Some(child) = self.banner_group.first_child() {
-            self.banner_group.remove(&child);
-        }
-        
-        if !has_swayidle || !has_locker {
-            self.preferences_group.set_sensitive(false);
-            
-            if !has_swayidle {
-                let banner = libadwaita::ActionRow::new();
-                banner.set_title("Warning: swayidle not found");
-                banner.set_subtitle("Install swayidle to use idle locking");
-                self.banner_group.add(&banner);
-            }
-            if !has_locker {
-                let banner = libadwaita::ActionRow::new();
-                banner.set_title("Warning: No screen locker found");
-                banner.set_subtitle("Install swaylock or waylock");
-                self.banner_group.add(&banner);
-            }
-        } else {
-            self.preferences_group.set_sensitive(true);
-        }
+        self.swayidle_banner.set_visible(!has_swayidle);
+        self.locker_banner.set_visible(!has_locker);
+        let show_banner = !has_swayidle || !has_locker;
+        self.banner_group.set_visible(show_banner);
+        self.preferences_group.set_sensitive(has_swayidle && has_locker);
     }
 
     /// Get a reference to the page's widget

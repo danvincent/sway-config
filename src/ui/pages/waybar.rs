@@ -73,8 +73,10 @@ pub struct WaybarPage {
     position_combo: libadwaita::ComboRow,
     height_spin: libadwaita::SpinRow,
     preferences_group: libadwaita::PreferencesGroup,
-    modules_group: libadwaita::PreferencesGroup,
+    /// Container for dynamically rebuilt module sections (gtk4::Box — supports remove())
+    modules_box: gtk4::Box,
     banner_group: libadwaita::PreferencesGroup,
+    no_waybar_banner: libadwaita::ActionRow,
     loading: Rc<Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
@@ -120,17 +122,25 @@ impl WaybarPage {
         
         prefs_page.add(&preferences_group);
 
-        // ── Module selection group ─────────────────────────────────────────────
-        let modules_group = libadwaita::PreferencesGroup::new();
-        modules_group.set_title("Modules");
-        modules_group.set_description(Some("Select which modules appear in each bar section"));
-        prefs_page.add(&modules_group);
-
-        // ── Banner group ───────────────────────────────────────────────────────
+        // ── Banner group — created once, shown/hidden via set_visible() ────────
         let banner_group = libadwaita::PreferencesGroup::new();
+        let no_waybar_banner = libadwaita::ActionRow::new();
+        no_waybar_banner.set_title("Warning: Waybar is not installed");
+        no_waybar_banner.set_subtitle("Install waybar to use this configuration");
+        banner_group.add(&no_waybar_banner);
+        no_waybar_banner.set_visible(false);
+        banner_group.set_visible(false);
         prefs_page.add(&banner_group);
-        
-        clamp.set_child(Some(&prefs_page));
+
+        // ── Module selection — gtk4::Box so its PreferencesGroup children can be safely removed ──
+        // modules_box sits alongside prefs_page inside an outer_box under the clamp.
+        let modules_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+
+        let outer_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        outer_box.append(&prefs_page);
+        outer_box.append(&modules_box);
+
+        clamp.set_child(Some(&outer_box));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
 
@@ -172,8 +182,9 @@ impl WaybarPage {
             position_combo,
             height_spin,
             preferences_group,
-            modules_group,
+            modules_box,
             banner_group,
+            no_waybar_banner,
             loading,
             app_state,
         }
@@ -196,9 +207,10 @@ impl WaybarPage {
         self.position_combo.set_selected(bar_position_index(config.position));
         self.height_spin.set_value(config.height as f64);
 
-        // Rebuild module checkboxes
-        while let Some(child) = self.modules_group.first_child() {
-            self.modules_group.remove(&child);
+        // Rebuild module groups: clear modules_box (gtk4::Box — safe to remove children)
+        // then create a fresh PreferencesGroup per section and append it.
+        while let Some(child) = self.modules_box.first_child() {
+            self.modules_box.remove(&child);
         }
         self.build_module_section("Left", MODULES_LEFT_OPTIONS, config, ModuleSection::Left);
         self.build_module_section("Center", MODULES_CENTER_OPTIONS, config, ModuleSection::Center);
@@ -214,6 +226,9 @@ impl WaybarPage {
         config: &WaybarConfig,
         section: ModuleSection,
     ) {
+        let group = libadwaita::PreferencesGroup::new();
+        group.set_title(section_label);
+
         let expander = libadwaita::ExpanderRow::new();
         expander.set_title(section_label);
         expander.set_expanded(true);
@@ -260,27 +275,16 @@ impl WaybarPage {
             expander.add_row(&row);
         }
 
-        self.modules_group.add(&expander);
+        group.add(&expander);
+        self.modules_box.append(&group);
     }
 
     /// Bind feature detection and show warnings if needed
     pub fn bind_detection(&self, has_waybar: bool) {
-        while let Some(child) = self.banner_group.first_child() {
-            self.banner_group.remove(&child);
-        }
-        
-        if !has_waybar {
-            self.preferences_group.set_sensitive(false);
-            self.modules_group.set_sensitive(false);
-            
-            let banner = libadwaita::ActionRow::new();
-            banner.set_title("Warning: Waybar is not installed");
-            banner.set_subtitle("Install waybar to use this configuration");
-            self.banner_group.add(&banner);
-        } else {
-            self.preferences_group.set_sensitive(true);
-            self.modules_group.set_sensitive(true);
-        }
+        self.no_waybar_banner.set_visible(!has_waybar);
+        self.banner_group.set_visible(!has_waybar);
+        self.preferences_group.set_sensitive(has_waybar);
+        self.modules_box.set_sensitive(has_waybar);
     }
 
     /// Get a reference to the page's widget
