@@ -1,6 +1,7 @@
 /// Application state management
 /// Tracks the current settings and dirty state (whether changes have been made)
 use crate::model::settings::Settings;
+use std::path::{Path, PathBuf};
 
 /// Shared application state tracking settings and dirty status
 #[derive(Debug, Clone)]
@@ -14,6 +15,8 @@ pub struct AppState {
     outputs_dirty: bool,
     keyboards_dirty: bool,
     touchpads_dirty: bool,
+    /// Override config output path for test mode; None uses the XDG default.
+    base_config_path: Option<PathBuf>,
 }
 
 impl AppState {
@@ -25,9 +28,19 @@ impl AppState {
             outputs_dirty: false,
             keyboards_dirty: false,
             touchpads_dirty: false,
+            base_config_path: None,
         }
     }
 
+    /// Set the config output path override (for test mode).
+    pub fn set_config_path(&mut self, path: PathBuf) {
+        self.base_config_path = Some(path);
+    }
+
+    /// Get the config output path override, if any.
+    pub fn config_path(&self) -> Option<&Path> {
+        self.base_config_path.as_deref()
+    }
     /// Mark the state as dirty (settings have changed)
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
@@ -101,6 +114,11 @@ impl AppState {
     pub fn mark_touchpads_dirty(&mut self) {
         self.dirty = true;
         self.touchpads_dirty = true;
+    }
+
+    /// Replace all settings (used during revert).
+    pub fn replace_settings(&mut self, settings: Settings) {
+        self.settings = settings;
     }
 
     /// Get a reference to the current settings

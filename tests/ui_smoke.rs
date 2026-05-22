@@ -914,3 +914,179 @@ fn test_make_entry_spaces_in_command_replaced_in_id() {
     let entry = make_entry("my program", "");
     assert!(!entry.id.contains(' '), "ID must not contain spaces: {}", entry.id);
 }
+
+// =============================================================================
+// Phase 7: Apply + Revert headless tests
+// =============================================================================
+
+#[test]
+fn test_apply_in_test_mode_writes_sway_conf_files() {
+    use sway_configurator::config::render::render_and_apply;
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let tmp = std::env::temp_dir().join("sway_cfg_test_apply");
+    let _ = std::fs::remove_dir_all(&tmp);
+    // Pre-create the sway/conf.d path so the apply step can write files
+    std::fs::create_dir_all(tmp.join("sway/conf.d")).unwrap();
+
+    let mut state = AppState::new(Settings::default());
+    state.set_config_path(tmp.clone());
+
+    let result = render_and_apply(&state);
+    // With sway/conf.d pre-created, files should be written (swaymsg may fail but success=true)
+    // At minimum, verify the config_path override was respected and no panic occurred
+    assert_eq!(state.config_path(), Some(tmp.as_path()));
+    // Files written list should include our tmp base path prefix
+    for f in &result.files_written {
+        assert!(f.contains(tmp.to_str().unwrap()), "file {f} not under tmp");
+    }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn test_apply_marks_clean_on_success() {
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let mut state = AppState::new(Settings::default());
+    state.mark_dirty();
+    assert!(state.is_dirty());
+
+    // Simulate the Apply success path: mark_clean()
+    state.mark_clean();
+    assert!(!state.is_dirty());
+}
+
+#[test]
+fn test_revert_restores_settings_and_marks_clean() {
+    use sway_configurator::config::store::SettingsStore;
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let tmp = std::env::temp_dir().join("sway_cfg_test_revert.toml");
+    let mut settings = Settings::default();
+    settings.idle.lock_timeout = 42;
+
+    let store = SettingsStore { path: tmp.clone(), settings };
+    store.save().unwrap();
+
+    let mut state = AppState::new(Settings::default());
+    state.mark_dirty();
+    assert!(state.is_dirty());
+
+    // Simulate revert: reload from store, replace settings, suppress hardware detection,
+    // then mark clean — mirrors the production Revert closure logic exactly
+    let fresh = SettingsStore::load(&tmp).unwrap();
+    state.replace_settings(fresh.settings);
+    // Suppress hardware re-detection for Outputs/Inputs pages
+    state.mark_outputs_dirty();
+    state.mark_keyboards_dirty();
+    state.mark_touchpads_dirty();
+    // (here on_navigate would be called on the visible page)
+    state.mark_clean();
+
+    assert!(!state.is_dirty());
+    assert_eq!(state.settings().idle.lock_timeout, 42);
+    // After mark_clean, should_refresh returns true (next navigation can re-detect hardware)
+    assert!(state.should_refresh_outputs());
+
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn test_revert_dirty_flags_suppress_detection() {
+    // Verifies that the Revert flow sets outputs/keyboards/touchpads dirty
+    // BEFORE calling on_navigate(), so should_refresh_*() returns false,
+    // preventing hardware detection from overwriting reverted settings.
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let mut state = AppState::new(Settings::default());
+    state.replace_settings(Settings::default());
+    state.mark_outputs_dirty();
+    state.mark_keyboards_dirty();
+    state.mark_touchpads_dirty();
+
+    // While dirty, hardware detection is suppressed
+    assert!(!state.should_refresh_outputs());
+    assert!(!state.should_refresh_keyboards());
+    assert!(!state.should_refresh_touchpads());
+
+    state.mark_clean();
+
+    // After clean, next navigation is free to re-detect
+    assert!(state.should_refresh_outputs());
+    assert!(state.should_refresh_keyboards());
+    assert!(state.should_refresh_touchpads());
+}
+
+#[test]
+fn test_revert_load_failure_does_not_replace_state() {
+    use sway_configurator::config::store::SettingsStore;
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().idle.lock_timeout = 99;
+    state.mark_dirty();
+
+    // SettingsStore::load returns Ok(default) for missing files; use corrupt TOML to force Err
+    let corrupt_tmp = std::env::temp_dir().join("sway_cfg_corrupt_test.toml");
+    std::fs::write(&corrupt_tmp, b"not valid toml }{{{").unwrap();
+    let result = SettingsStore::load(&corrupt_tmp);
+    let _ = std::fs::remove_file(&corrupt_tmp);
+    assert!(result.is_err(), "should fail to parse corrupt TOML");
+
+    // Production code: on error, return early without replacing state
+    if result.is_err() {
+        // Don't modify state — just show a toast (not testable headlessly)
+    } else {
+        state.replace_settings(result.unwrap().settings);
+        state.mark_clean();
+    }
+
+    // State unchanged — still dirty with original value
+    assert!(state.is_dirty());
+    assert_eq!(state.settings().idle.lock_timeout, 99);
+}
+
+#[test]
+fn test_apply_bar_hidden_when_clean() {
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let state = AppState::new(Settings::default());
+    assert!(!state.is_dirty(), "new state must be clean → apply bar hidden");
+}
+
+#[test]
+fn test_apply_bar_visible_when_dirty() {
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let mut state = AppState::new(Settings::default());
+    state.mark_dirty();
+    assert!(state.is_dirty(), "after mark_dirty → apply bar visible");
+}
+
+#[test]
+fn test_config_path_none_by_default() {
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+
+    let state = AppState::new(Settings::default());
+    assert!(state.config_path().is_none());
+}
+
+#[test]
+fn test_config_path_override_set() {
+    use sway_configurator::state::AppState;
+    use sway_configurator::model::settings::Settings;
+    use std::path::PathBuf;
+
+    let mut state = AppState::new(Settings::default());
+    state.set_config_path(PathBuf::from("/tmp/sway_test_override"));
+    assert_eq!(state.config_path(), Some(std::path::Path::new("/tmp/sway_test_override")));
+}

@@ -2,15 +2,21 @@
 use crate::config::apply::{apply, ApplyConfig, ApplyResult};
 use crate::state::AppState;
 
-/// Render and apply configuration from app state to user's config directory
+/// Render and apply configuration from app state to user's config directory.
+/// If `state.config_path()` is set (test mode), that path is used as the
+/// base directory instead of the XDG default.
 pub fn render_and_apply(state: &AppState) -> ApplyResult {
-    let config_dir = dirs_config_home();
+    let config_dir = state.config_path()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(dirs_config_home);
     apply(state.settings(), ApplyConfig::default(), &config_dir)
 }
 
 /// Render configuration without applying (dry run)
 pub fn render_dry_run(state: &AppState) -> ApplyResult {
-    let config_dir = dirs_config_home();
+    let config_dir = state.config_path()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(dirs_config_home);
     apply(
         state.settings(),
         ApplyConfig {

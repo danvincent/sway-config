@@ -3,6 +3,7 @@ use gtk4::prelude::*;
 use gtk4::{Align, Orientation};
 
 /// ApplyBar - shows unsaved changes notification and action buttons
+#[derive(Clone)]
 pub struct ApplyBar {
     widget: gtk4::Box,
     button_apply: gtk4::Button,
@@ -47,9 +48,9 @@ impl ApplyBar {
         self.widget.upcast_ref()
     }
 
-    /// Clone the apply bar's widget as a gtk4::Widget
-    pub fn clone_widget(&self) -> gtk4::Widget {
-        self.widget.clone().upcast()
+    /// Set visibility of the apply bar
+    pub fn set_visible(&self, visible: bool) {
+        self.widget.set_visible(visible);
     }
 
     /// Set visibility based on dirty state

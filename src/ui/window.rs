@@ -2,7 +2,9 @@
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
+use crate::config::render::render_and_apply;
 use crate::config::store::SettingsStore;
 use crate::state::AppState;
 use crate::ui::pages::*;
@@ -16,6 +18,10 @@ pub struct SwayConfigWindow {
     app_state: Rc<RefCell<AppState>>,
     /// Apply bar for unsaved changes
     apply_bar: ApplyBar,
+    /// ToastOverlay wrapping the content area for in-app notifications
+    toast_overlay: libadwaita::ToastOverlay,
+    /// Path to the settings store (used for Revert)
+    store_path: PathBuf,
     /// Current page (tracks which page is displayed)
     current_page: Rc<RefCell<String>>,
     /// Stack widget for managing visible page
@@ -40,6 +46,7 @@ impl SwayConfigWindow {
         window.set_title(Some("Sway Configurator"));
         window.set_default_size(1200, 700);
 
+        let store_path = store.path.clone();
         let app_state = Rc::new(RefCell::new(AppState::new(store.settings)));
 
         // Create the main navigation split view
@@ -124,13 +131,17 @@ impl SwayConfigWindow {
         // Create the apply bar
         let apply_bar = ApplyBar::new();
 
-        // Add apply bar at the bottom
+        // Add apply bar at the bottom (hidden initially)
         let separator = gtk4::Separator::new(gtk4::Orientation::Horizontal);
         content_box.append(&separator);
         content_box.append(apply_bar.widget());
 
+        // Wrap content in a ToastOverlay for in-app notifications
+        let toast_overlay = libadwaita::ToastOverlay::new();
+        toast_overlay.set_child(Some(&content_box));
+
         // Create detail page
-        let detail_page = libadwaita::NavigationPage::new(&content_box, "Settings");
+        let detail_page = libadwaita::NavigationPage::new(&toast_overlay, "Settings");
         split_view.set_content(Some(&detail_page));
 
         // Set the split view as window content
@@ -140,6 +151,8 @@ impl SwayConfigWindow {
             window,
             app_state,
             apply_bar,
+            toast_overlay,
+            store_path,
             current_page: Rc::new(RefCell::new("outputs".to_string())),
             stack,
             list_box,
@@ -153,8 +166,9 @@ impl SwayConfigWindow {
             general_page,
         };
 
-        // Wire up navigation
+        // Wire up navigation and apply/revert
         window_obj.setup_navigation();
+        window_obj.setup_apply_revert();
 
         // Setup initial state visibility
         window_obj.update_apply_bar_visibility();
@@ -202,7 +216,7 @@ impl SwayConfigWindow {
             let notifications_page = Rc::clone(&self.notifications_page);
             let themes_page = Rc::clone(&self.themes_page);
             let general_page = Rc::clone(&self.general_page);
-            let apply_bar = self.apply_bar.clone_widget();
+            let apply_bar = self.apply_bar.clone();
             let app_state = self.app_state.clone();
 
             self.stack.connect_notify_local(Some("visible-child-name"), move |stack, _| {
@@ -221,6 +235,108 @@ impl SwayConfigWindow {
                 }
                 // refresh apply bar after any state changes from on_navigate
                 apply_bar.set_visible(app_state.borrow().is_dirty());
+            });
+        }
+    }
+
+    /// Wire Apply and Revert button signals
+    fn setup_apply_revert(&self) {
+        // Apply: render → write sway config files → save settings.toml → show toast → mark clean
+        {
+            let app_state = self.app_state.clone();
+            let toast_overlay = self.toast_overlay.clone();
+            let apply_bar = self.apply_bar.clone();
+            let store_path = self.store_path.clone();
+
+            self.apply_bar.button_apply().connect_clicked(move |_| {
+                let result = {
+                    let state = app_state.borrow();
+                    render_and_apply(&state)
+                };
+
+                if result.success {
+                    // Persist settings.toml so Revert can return to this state
+                    let settings = app_state.borrow().settings().clone();
+                    let store = SettingsStore { path: store_path.clone(), settings };
+                    if let Err(e) = store.save() {
+                        let msg = format!("Applied to sway but failed to save settings: {e}");
+                        toast_overlay.add_toast(libadwaita::Toast::new(&msg));
+                        return;
+                    }
+
+                    app_state.borrow_mut().mark_clean();
+                    apply_bar.set_visible(false);
+
+                    let msg = if result.errors.is_empty() {
+                        "Configuration applied successfully".to_string()
+                    } else {
+                        // success=true but some reload/restart steps had non-fatal errors
+                        format!("Applied with warnings: {}", result.errors.join("; "))
+                    };
+                    toast_overlay.add_toast(libadwaita::Toast::new(&msg));
+                } else {
+                    let msg = if result.errors.is_empty() {
+                        "Failed to apply configuration".to_string()
+                    } else {
+                        format!("Error: {}", result.errors.join("; "))
+                    };
+                    toast_overlay.add_toast(libadwaita::Toast::new(&msg));
+                }
+            });
+        }
+
+        // Revert: reload settings.toml → replace in-memory settings → refresh current page → mark clean
+        {
+            let app_state = self.app_state.clone();
+            let store_path = self.store_path.clone();
+            let toast_overlay = self.toast_overlay.clone();
+            let apply_bar = self.apply_bar.clone();
+            let current_page = self.current_page.clone();
+            let outputs_page = Rc::clone(&self.outputs_page);
+            let inputs_page = Rc::clone(&self.inputs_page);
+            let idle_page = Rc::clone(&self.idle_page);
+            let waybar_page = Rc::clone(&self.waybar_page);
+            let autostart_page = Rc::clone(&self.autostart_page);
+            let notifications_page = Rc::clone(&self.notifications_page);
+            let themes_page = Rc::clone(&self.themes_page);
+            let general_page = Rc::clone(&self.general_page);
+
+            self.apply_bar.button_revert().connect_clicked(move |_| {
+                let fresh_settings = match SettingsStore::load(&store_path) {
+                    Ok(store) => store.settings,
+                    Err(e) => {
+                        let msg = format!("Failed to reload settings: {e}");
+                        toast_overlay.add_toast(libadwaita::Toast::new(&msg));
+                        return;
+                    }
+                };
+
+                app_state.borrow_mut().replace_settings(fresh_settings);
+
+                // Before calling on_navigate() on Outputs/Inputs, set per-section dirty flags
+                // so should_refresh_*() returns false and hardware re-detection is skipped.
+                // This ensures on_navigate() reloads from the just-reverted settings.toml values
+                // rather than overwriting them with freshly detected hardware state.
+                app_state.borrow_mut().mark_outputs_dirty();
+                app_state.borrow_mut().mark_keyboards_dirty();
+                app_state.borrow_mut().mark_touchpads_dirty();
+
+                // Refresh the currently visible page
+                match current_page.borrow().as_str() {
+                    "outputs" => outputs_page.on_navigate(),
+                    "inputs" => inputs_page.on_navigate(),
+                    "idle" => idle_page.on_navigate(),
+                    "waybar" => waybar_page.on_navigate(),
+                    "autostart" => autostart_page.on_navigate(),
+                    "notifications" => notifications_page.on_navigate(),
+                    "themes" => themes_page.on_navigate(),
+                    "general" => general_page.on_navigate(),
+                    _ => {}
+                }
+
+                // Now safe to mark clean — dirty flags are cleared, apply bar hidden
+                app_state.borrow_mut().mark_clean();
+                apply_bar.set_visible(false);
             });
         }
     }
