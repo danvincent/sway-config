@@ -34,12 +34,12 @@ install -Dpm0644 README.md %{buildroot}%{_docdir}/%{name}/README.md
 install -Dpm0644 LICENSE %{buildroot}%{_docdir}/%{name}/LICENSE
 
 %files
-%license LICENSE
-%doc README.md
 %{_bindir}/sway-config
 %{_datadir}/applications/sway-config.desktop
 %{_datadir}/icons/hicolor/scalable/apps/sway-config.svg
+%{_docdir}/%{name}/README.md
+%license %{_docdir}/%{name}/LICENSE
 
 %changelog
-* Fri May 22 2026 Daniel Vincent <daniel@example.com> - 0.1.0-1
+* Fri May 22 2026 Daniel Vincent <danvincent@users.noreply.github.com> - 0.1.0-1
 - Initial RPM packaging

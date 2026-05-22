@@ -115,7 +115,7 @@ Artifacts: `target/generate-rpm/*.rpm`
 
 ### Arch Linux package
 
-`packaging/PKGBUILD` is provided. Build with `makepkg` from an unpacked source tarball named `sway-config-<version>.tar.gz`:
+`packaging/PKGBUILD` is provided. Run `makepkg` in a directory that contains `PKGBUILD` and the source tarball `sway-config-<version>.tar.gz` (makepkg will unpack the tarball itself):
 
 ```bash
 makepkg -si
