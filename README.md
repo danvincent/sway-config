@@ -146,7 +146,7 @@ Defaults to `~/.config/sway-config/settings.toml`
 
 ## Screenshots
 
-*(Add screenshots here)*
+<img width="955" height="1039" alt="screenshot-20260522-223912" src="https://github.com/user-attachments/assets/b3d28842-c6ca-4ad7-b7d3-86da378974e1" />
 
 ## License
 
