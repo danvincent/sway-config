@@ -21,7 +21,11 @@ impl ThemeSelection {
         }
     }
 
-    pub fn with_path(name: impl Into<String>, source: impl Into<String>, path: impl Into<String>) -> Self {
+    pub fn with_path(
+        name: impl Into<String>,
+        source: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
         ThemeSelection {
             name: name.into(),
             source: source.into(),

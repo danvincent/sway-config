@@ -1,8 +1,8 @@
 /// Settings store - loads and saves configuration to disk
 use crate::model::settings::Settings;
-use std::path::{Path, PathBuf};
-use std::fs;
 use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct SettingsStore {
@@ -23,19 +23,25 @@ impl SettingsStore {
 
     /// Pure function to resolve config path given optional XDG_CONFIG_HOME and HOME env vars
     /// This function doesn't access the process environment, making it safe to test without mutation
-    /// 
+    ///
     /// # Arguments
     /// * `xdg_config_home` - Optional value of XDG_CONFIG_HOME environment variable
     /// * `home` - Optional value of HOME environment variable
-    /// 
+    ///
     /// # Returns
     /// Path to `sway-configurator/settings.toml` using XDG conventions
     pub fn resolve_config_path(xdg_config_home: Option<&str>, home: Option<&str>) -> PathBuf {
         let config_dir = xdg_config_home
-            .and_then(|xdg| if xdg.is_empty() { None } else { Some(xdg.to_string()) })
+            .and_then(|xdg| {
+                if xdg.is_empty() {
+                    None
+                } else {
+                    Some(xdg.to_string())
+                }
+            })
             .or_else(|| home.map(|home| format!("{}/.config", home)))
             .unwrap_or_else(|| ".config".to_string());
-        
+
         PathBuf::from(config_dir)
             .join("sway-configurator")
             .join("settings.toml")
@@ -58,7 +64,7 @@ impl SettingsStore {
     /// Load settings from disk, or create defaults if file doesn't exist
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let path = path.as_ref().to_path_buf();
-        
+
         let settings = if path.exists() {
             let content = fs::read_to_string(&path)?;
             toml::from_str(&content)?
@@ -111,13 +117,18 @@ mod tests {
     #[test]
     fn test_default_path_ends_with_settings_toml() {
         let path = SettingsStore::default_path();
-        assert!(path.to_string_lossy().ends_with("sway-configurator/settings.toml"));
+        assert!(path
+            .to_string_lossy()
+            .ends_with("sway-configurator/settings.toml"));
     }
 
     #[test]
     fn test_default_path_is_absolute() {
         let path = SettingsStore::default_path();
-        assert!(path.is_absolute(), "default_path should return an absolute path");
+        assert!(
+            path.is_absolute(),
+            "default_path should return an absolute path"
+        );
     }
 
     #[test]
@@ -130,12 +141,13 @@ mod tests {
     }
 
     // Tests for resolve_config_path - pure function, no env mutation needed
-    
+
     #[test]
     fn test_resolve_config_path_uses_xdg_config_home_when_set() {
         let path = SettingsStore::resolve_config_path(Some("/custom/config"), Some("/home/user"));
         assert!(
-            path.to_string_lossy().starts_with("/custom/config/sway-configurator"),
+            path.to_string_lossy()
+                .starts_with("/custom/config/sway-configurator"),
             "resolve_config_path should use XDG_CONFIG_HOME when set: {}",
             path.display()
         );
@@ -145,7 +157,8 @@ mod tests {
     fn test_resolve_config_path_ignores_empty_xdg_config_home() {
         let path = SettingsStore::resolve_config_path(Some(""), Some("/home/user"));
         assert!(
-            path.to_string_lossy().contains("/home/user/.config/sway-configurator"),
+            path.to_string_lossy()
+                .contains("/home/user/.config/sway-configurator"),
             "resolve_config_path should ignore empty XDG_CONFIG_HOME: {}",
             path.display()
         );
@@ -196,7 +209,7 @@ mod tests {
         let mut store = SettingsStore::open_at(&dir).unwrap();
         store.settings.idle.lock_timeout = 999;
         store.save().unwrap();
-        
+
         let reloaded = SettingsStore::open_at(&dir).unwrap();
         assert_eq!(reloaded.settings.idle.lock_timeout, 999);
     }

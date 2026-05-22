@@ -11,10 +11,7 @@ pub const MODULES_LEFT_OPTIONS: &[&str] = &[
 ];
 
 /// Center
-pub const MODULES_CENTER_OPTIONS: &[&str] = &[
-    "clock",
-    "sway/window",
-];
+pub const MODULES_CENTER_OPTIONS: &[&str] = &["clock", "sway/window"];
 
 /// Right side
 pub const MODULES_RIGHT_OPTIONS: &[&str] = &[
@@ -53,6 +50,10 @@ pub fn bar_position_from_index(idx: u32) -> BarPosition {
 // ── GTK page ──────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "gtk")]
+use crate::model::waybar::{WaybarConfig, WaybarModule};
+#[cfg(feature = "gtk")]
+use crate::state::AppState;
+#[cfg(feature = "gtk")]
 use gtk4::prelude::*;
 #[cfg(feature = "gtk")]
 use libadwaita::prelude::*;
@@ -60,10 +61,6 @@ use libadwaita::prelude::*;
 use std::cell::{Cell, RefCell};
 #[cfg(feature = "gtk")]
 use std::rc::Rc;
-#[cfg(feature = "gtk")]
-use crate::model::waybar::{WaybarConfig, WaybarModule};
-#[cfg(feature = "gtk")]
-use crate::state::AppState;
 
 /// Waybar page - for configuring the status bar
 #[cfg(feature = "gtk")]
@@ -86,11 +83,11 @@ impl WaybarPage {
     /// Create a new waybar page
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        
+
         let scrolled = gtk4::ScrolledWindow::new();
         scrolled.set_hexpand(true);
         scrolled.set_vexpand(true);
-        
+
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
 
@@ -107,13 +104,13 @@ impl WaybarPage {
         // ── General group ─────────────────────────────────────────────────────
         let preferences_group = libadwaita::PreferencesGroup::new();
         preferences_group.set_title("Waybar Configuration");
-        
+
         let enabled_switch = libadwaita::SwitchRow::new();
         enabled_switch.set_title("Enable waybar");
         enabled_switch.set_subtitle("Show the status bar on screen");
         enabled_switch.set_active(true);
         preferences_group.add(&enabled_switch);
-        
+
         let position_model = gtk4::StringList::new(&["Top", "Bottom", "Left", "Right"]);
         let position_combo = libadwaita::ComboRow::new();
         position_combo.set_model(Some(&position_model));
@@ -121,7 +118,7 @@ impl WaybarPage {
         position_combo.set_subtitle("Position of the bar on screen");
         position_combo.set_selected(0);
         preferences_group.add(&position_combo);
-        
+
         let adj = gtk4::Adjustment::new(30.0, 10.0, 200.0, 1.0, 5.0, 0.0);
         let height_spin = libadwaita::SpinRow::new(Some(&adj), 1.0, 0);
         height_spin.set_title("Height");
@@ -155,7 +152,9 @@ impl WaybarPage {
             let state = Rc::clone(&app_state);
             let loading = Rc::clone(&loading);
             enabled_switch.connect_active_notify(move |row| {
-                if loading.get() { return; }
+                if loading.get() {
+                    return;
+                }
                 state.borrow_mut().settings_mut().waybar.enabled = row.is_active();
                 state.borrow_mut().mark_dirty();
             });
@@ -164,7 +163,9 @@ impl WaybarPage {
             let state = Rc::clone(&app_state);
             let loading = Rc::clone(&loading);
             position_combo.connect_selected_notify(move |row| {
-                if loading.get() { return; }
+                if loading.get() {
+                    return;
+                }
                 state.borrow_mut().settings_mut().waybar.position =
                     bar_position_from_index(row.selected());
                 state.borrow_mut().mark_dirty();
@@ -174,7 +175,9 @@ impl WaybarPage {
             let state = Rc::clone(&app_state);
             let loading = Rc::clone(&loading);
             height_spin.connect_value_notify(move |row| {
-                if loading.get() { return; }
+                if loading.get() {
+                    return;
+                }
                 state.borrow_mut().settings_mut().waybar.height = row.value() as u32;
                 state.borrow_mut().mark_dirty();
             });
@@ -193,22 +196,23 @@ impl WaybarPage {
             app_state,
         }
     }
-    
+
     /// Navigate to this page - load waybar config from app_state
     pub fn on_navigate(&self) {
         let config = self.app_state.borrow().settings().waybar.clone();
         self.load_waybar(&config);
-        
+
         let has_waybar = crate::config::feature::has_waybar();
         self.bind_detection(has_waybar);
     }
-    
+
     /// Load waybar configuration into the page (suppresses signal write-back)
     pub fn load_waybar(&self, config: &WaybarConfig) {
         self.loading.set(true);
 
         self.enabled_switch.set_active(config.enabled);
-        self.position_combo.set_selected(bar_position_index(config.position));
+        self.position_combo
+            .set_selected(bar_position_index(config.position));
         self.height_spin.set_value(config.height as f64);
 
         // Rebuild module groups: clear modules_box (gtk4::Box — safe to remove children)
@@ -217,7 +221,12 @@ impl WaybarPage {
             self.modules_box.remove(&child);
         }
         self.build_module_section("Left", MODULES_LEFT_OPTIONS, config, ModuleSection::Left);
-        self.build_module_section("Center", MODULES_CENTER_OPTIONS, config, ModuleSection::Center);
+        self.build_module_section(
+            "Center",
+            MODULES_CENTER_OPTIONS,
+            config,
+            ModuleSection::Center,
+        );
         self.build_module_section("Right", MODULES_RIGHT_OPTIONS, config, ModuleSection::Right);
 
         self.loading.set(false);
@@ -258,12 +267,32 @@ impl WaybarPage {
                 let mut borrowed = state.borrow_mut();
                 match section {
                     ModuleSection::Left => {
-                        borrowed.settings_mut().waybar.modules_left.retain(|m| m != &name);
-                        if on { borrowed.settings_mut().waybar.modules_left.push(name.clone()); }
+                        borrowed
+                            .settings_mut()
+                            .waybar
+                            .modules_left
+                            .retain(|m| m != &name);
+                        if on {
+                            borrowed
+                                .settings_mut()
+                                .waybar
+                                .modules_left
+                                .push(name.clone());
+                        }
                     }
                     ModuleSection::Center => {
-                        borrowed.settings_mut().waybar.modules_center.retain(|m| m != &name);
-                        if on { borrowed.settings_mut().waybar.modules_center.push(name.clone()); }
+                        borrowed
+                            .settings_mut()
+                            .waybar
+                            .modules_center
+                            .retain(|m| m != &name);
+                        if on {
+                            borrowed
+                                .settings_mut()
+                                .waybar
+                                .modules_center
+                                .push(name.clone());
+                        }
                     }
                     ModuleSection::Right => {
                         let modules = &mut borrowed.settings_mut().waybar.modules_right;

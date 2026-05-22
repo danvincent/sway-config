@@ -1,14 +1,14 @@
+use crate::model::autostart::AutostartConfig;
+use crate::model::general::GeneralConfig;
+use crate::model::idle::IdleConfig;
+use crate::model::input::{KeyboardConfig, TouchpadConfig};
+use crate::model::notifications::NotificationsConfig;
+use crate::model::output::OutputConfig;
 /// Pure read helpers — extract model config from Settings without any GTK.
 /// These are headless-testable and used by UI pages to populate widgets.
 use crate::model::settings::Settings;
-use crate::model::idle::IdleConfig;
-use crate::model::waybar::WaybarConfig;
-use crate::model::notifications::NotificationsConfig;
-use crate::model::output::OutputConfig;
-use crate::model::input::{KeyboardConfig, TouchpadConfig};
-use crate::model::autostart::AutostartConfig;
 use crate::model::theme::ThemeSelection;
-use crate::model::general::GeneralConfig;
+use crate::model::waybar::WaybarConfig;
 
 pub fn read_idle(settings: &Settings) -> IdleConfig {
     settings.idle.clone()
@@ -49,12 +49,12 @@ pub fn read_general(settings: &Settings) -> GeneralConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::autostart::{AutostartConfig, AutostartEntry};
+    use crate::model::idle::IdleConfig;
+    use crate::model::notifications::NotificationsConfig;
     use crate::model::settings::Settings;
     use crate::model::theme::ThemeSelection;
-    use crate::model::idle::IdleConfig;
     use crate::model::waybar::WaybarConfig;
-    use crate::model::notifications::NotificationsConfig;
-    use crate::model::autostart::{AutostartConfig, AutostartEntry};
 
     #[test]
     fn test_read_idle_roundtrip() {

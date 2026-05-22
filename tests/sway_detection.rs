@@ -1,11 +1,10 @@
+use sway_configurator::config::detect;
 /// Tests for Sway session detection and configuration parsing
 /// These tests use fixture JSON strings and do NOT invoke the live swaymsg command
-
-use sway_configurator::config::detect::{SwayOutput, SwayInput, Rect, LibinputConfig};
+use sway_configurator::config::detect::{LibinputConfig, Rect, SwayInput, SwayOutput};
 use sway_configurator::config::swaymsg::is_sway_running;
-use sway_configurator::config::detect;
-use sway_configurator::model::output::OutputConfig;
 use sway_configurator::model::input::{KeyboardConfig, TouchpadConfig};
+use sway_configurator::model::output::OutputConfig;
 
 // ============================================================================
 // JSON FIXTURES
@@ -27,12 +26,12 @@ const EMPTY_INPUTS_FIXTURE: &str = "[]";
 
 #[test]
 fn test_parse_sway_output_from_json() {
-    let outputs: Vec<SwayOutput> = serde_json::from_str(SWAY_OUTPUT_FIXTURE)
-        .expect("Failed to parse output fixture");
-    
+    let outputs: Vec<SwayOutput> =
+        serde_json::from_str(SWAY_OUTPUT_FIXTURE).expect("Failed to parse output fixture");
+
     assert_eq!(outputs.len(), 1);
     let output = &outputs[0];
-    
+
     assert_eq!(output.name, "eDP-1");
     assert_eq!(output.make, "AU Optronics");
     assert_eq!(output.model, "0x1420");
@@ -43,53 +42,59 @@ fn test_parse_sway_output_from_json() {
     assert_eq!(output.scale, 1.0);
     assert_eq!(output.transform, "normal");
     assert!(output.focused);
-    
+
     assert_eq!(output.rect.x, 0);
     assert_eq!(output.rect.y, 0);
     assert_eq!(output.rect.width, 1920);
     assert_eq!(output.rect.height, 1080);
-    
+
     assert!(output.current_mode.is_some());
     let mode = output.current_mode.as_ref().unwrap();
     assert_eq!(mode.width, 1920);
     assert_eq!(mode.height, 1080);
     assert_eq!(mode.refresh, 60000);
-    
+
     assert_eq!(output.modes.len(), 1);
 }
 
 #[test]
 fn test_parse_sway_input_keyboard_from_json() {
-    let inputs: Vec<SwayInput> = serde_json::from_str(SWAY_KEYBOARD_FIXTURE)
-        .expect("Failed to parse keyboard fixture");
-    
+    let inputs: Vec<SwayInput> =
+        serde_json::from_str(SWAY_KEYBOARD_FIXTURE).expect("Failed to parse keyboard fixture");
+
     assert_eq!(inputs.len(), 1);
     let input = &inputs[0];
-    
+
     assert_eq!(input.identifier, "1:1:AT_Translated_Set_2_keyboard");
     assert_eq!(input.name, "AT Translated Set 2 keyboard");
     assert_eq!(input.vendor, 1);
     assert_eq!(input.product, 1);
     assert_eq!(input.type_, "keyboard");
-    assert_eq!(input.xkb_active_layout_name, Some("English (UK)".to_string()));
+    assert_eq!(
+        input.xkb_active_layout_name,
+        Some("English (UK)".to_string())
+    );
     assert!(input.libinput.is_none());
 }
 
 #[test]
 fn test_parse_sway_input_touchpad_from_json() {
-    let inputs: Vec<SwayInput> = serde_json::from_str(SWAY_TOUCHPAD_FIXTURE)
-        .expect("Failed to parse touchpad fixture");
-    
+    let inputs: Vec<SwayInput> =
+        serde_json::from_str(SWAY_TOUCHPAD_FIXTURE).expect("Failed to parse touchpad fixture");
+
     assert_eq!(inputs.len(), 1);
     let input = &inputs[0];
-    
+
     assert_eq!(input.identifier, "2:7:SynPS/2_Synaptics_TouchPad");
     assert_eq!(input.name, "SynPS/2 Synaptics TouchPad");
     assert_eq!(input.vendor, 2);
     assert_eq!(input.product, 7);
     assert_eq!(input.type_, "touchpad");
-    
-    let libinput = input.libinput.as_ref().expect("touchpad should have libinput config");
+
+    let libinput = input
+        .libinput
+        .as_ref()
+        .expect("touchpad should have libinput config");
     assert_eq!(libinput.send_events, Some("enabled".to_string()));
     assert_eq!(libinput.tap, Some("enabled".to_string()));
     assert_eq!(libinput.natural_scroll, Some("disabled".to_string()));
@@ -102,15 +107,15 @@ fn test_parse_sway_input_touchpad_from_json() {
 
 #[test]
 fn test_parse_empty_outputs() {
-    let outputs: Vec<SwayOutput> = serde_json::from_str(EMPTY_OUTPUTS_FIXTURE)
-        .expect("Failed to parse empty outputs");
+    let outputs: Vec<SwayOutput> =
+        serde_json::from_str(EMPTY_OUTPUTS_FIXTURE).expect("Failed to parse empty outputs");
     assert_eq!(outputs.len(), 0);
 }
 
 #[test]
 fn test_parse_empty_inputs() {
-    let inputs: Vec<SwayInput> = serde_json::from_str(EMPTY_INPUTS_FIXTURE)
-        .expect("Failed to parse empty inputs");
+    let inputs: Vec<SwayInput> =
+        serde_json::from_str(EMPTY_INPUTS_FIXTURE).expect("Failed to parse empty inputs");
     assert_eq!(inputs.len(), 0);
 }
 
@@ -133,7 +138,7 @@ fn test_detect_keyboards_filters_correctly() {
         repeat_delay: None,
         repeat_rate: None,
     };
-    
+
     let touchpad_input = SwayInput {
         identifier: "test_tp".to_string(),
         name: "Test Touchpad".to_string(),
@@ -142,8 +147,8 @@ fn test_detect_keyboards_filters_correctly() {
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
-            repeat_delay: None,
-            repeat_rate: None,
+        repeat_delay: None,
+        repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -155,10 +160,10 @@ fn test_detect_keyboards_filters_correctly() {
             middle_emulation: None,
         }),
     };
-    
+
     let inputs = vec![keyboard_input, touchpad_input];
     let keyboards = detect::detect_keyboards(&inputs);
-    
+
     assert_eq!(keyboards.len(), 1);
     assert_eq!(keyboards[0].type_, "keyboard");
 }
@@ -177,7 +182,7 @@ fn test_detect_touchpads_filters_correctly() {
         repeat_delay: None,
         repeat_rate: None,
     };
-    
+
     let touchpad_input = SwayInput {
         identifier: "test_tp".to_string(),
         name: "Test Touchpad".to_string(),
@@ -186,8 +191,8 @@ fn test_detect_touchpads_filters_correctly() {
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
-            repeat_delay: None,
-            repeat_rate: None,
+        repeat_delay: None,
+        repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -199,10 +204,10 @@ fn test_detect_touchpads_filters_correctly() {
             middle_emulation: None,
         }),
     };
-    
+
     let inputs = vec![keyboard_input, touchpad_input];
     let touchpads = detect::detect_touchpads(&inputs);
-    
+
     assert_eq!(touchpads.len(), 1);
     assert_eq!(touchpads[0].type_, "touchpad");
 }
@@ -217,8 +222,8 @@ fn test_detect_touchpads_by_name() {
         type_: "other".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
-            repeat_delay: None,
-            repeat_rate: None,
+        repeat_delay: None,
+        repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -230,10 +235,10 @@ fn test_detect_touchpads_by_name() {
             middle_emulation: None,
         }),
     };
-    
+
     let inputs = vec![touchpad_by_name];
     let touchpads = detect::detect_touchpads(&inputs);
-    
+
     assert_eq!(touchpads.len(), 1, "Should detect touchpad by name");
 }
 
@@ -246,16 +251,19 @@ fn test_output_config_from_sway() {
     let sway_output: SwayOutput = serde_json::from_str(SWAY_OUTPUT_FIXTURE)
         .map(|v: Vec<SwayOutput>| v.into_iter().next().unwrap())
         .expect("Failed to parse fixture");
-    
+
     let config = OutputConfig::from_sway(&sway_output);
-    
+
     assert_eq!(config.name, "eDP-1");
     assert!(config.enabled);
     assert_eq!(config.scale, 1.0);
     assert_eq!(config.position.x, 0);
     assert_eq!(config.position.y, 0);
-    assert_eq!(config.transform, sway_configurator::model::output::Transform::Normal);
-    
+    assert_eq!(
+        config.transform,
+        sway_configurator::model::output::Transform::Normal
+    );
+
     assert!(config.resolution.is_some());
     let res = config.resolution.unwrap();
     assert_eq!(res.width, 1920);
@@ -267,13 +275,21 @@ fn test_keyboard_config_from_sway() {
     let sway_input: SwayInput = serde_json::from_str(SWAY_KEYBOARD_FIXTURE)
         .map(|v: Vec<SwayInput>| v.into_iter().next().unwrap())
         .expect("Failed to parse fixture");
-    
+
     let config = KeyboardConfig::from_sway(&sway_input);
 
     // Layout and options come from the sway config file; variant is empty (not set in sway config).
-    let (sway_layout, sway_variant, sway_options) = sway_configurator::config::detect::sway_config_keyboard_defaults();
+    let (sway_layout, sway_variant, sway_options) =
+        sway_configurator::config::detect::sway_config_keyboard_defaults();
     assert_eq!(config.identifier, "1:1:AT_Translated_Set_2_keyboard");
-    assert_eq!(config.xkb_layout, if !sway_layout.is_empty() { sway_layout } else { "gb".to_string() });
+    assert_eq!(
+        config.xkb_layout,
+        if !sway_layout.is_empty() {
+            sway_layout
+        } else {
+            "gb".to_string()
+        }
+    );
     assert_eq!(config.xkb_variant, sway_variant);
     assert_eq!(config.xkb_options, sway_options);
     assert_eq!(config.repeat_delay, 600);
@@ -285,17 +301,20 @@ fn test_touchpad_config_from_sway() {
     let sway_input: SwayInput = serde_json::from_str(SWAY_TOUCHPAD_FIXTURE)
         .map(|v: Vec<SwayInput>| v.into_iter().next().unwrap())
         .expect("Failed to parse fixture");
-    
+
     let config = TouchpadConfig::from_sway(&sway_input);
-    
+
     assert_eq!(config.identifier, "2:7:SynPS/2_Synaptics_TouchPad");
-    
+
     // Based on fixture: tap="enabled", natural_scroll="disabled", etc.
     assert!(config.tap_to_click); // enabled
     assert!(!config.natural_scroll); // disabled
     assert!(config.dwt); // enabled
     assert_eq!(config.accel_speed, 0.0);
-    assert_eq!(config.accel_profile, sway_configurator::model::input::AccelProfile::Adaptive);
+    assert_eq!(
+        config.accel_profile,
+        sway_configurator::model::input::AccelProfile::Adaptive
+    );
     assert!(!config.left_handed); // disabled
     assert!(!config.middle_emulation); // disabled
 }
@@ -310,18 +329,26 @@ fn test_output_config_defaults() {
         active: false,
         dpms: false,
         primary: false,
-        rect: Rect { x: 0, y: 0, width: 0, height: 0 },
+        rect: Rect {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        },
         current_mode: None,
         modes: vec![],
         scale: 1.0,
         transform: "normal".to_string(),
         focused: false,
     };
-    
+
     let config = OutputConfig::from_sway(&sway_output);
-    
+
     assert_eq!(config.scale, 1.0);
-    assert_eq!(config.transform, sway_configurator::model::output::Transform::Normal);
+    assert_eq!(
+        config.transform,
+        sway_configurator::model::output::Transform::Normal
+    );
 }
 
 #[test]
@@ -338,15 +365,17 @@ fn test_keyboard_config_defaults() {
         repeat_rate: None,
         libinput: None,
     };
-    
+
     let config = KeyboardConfig::from_sway(&sway_input);
 
     // Layout comes from sway config or /etc/default/keyboard fallback.
-    let (expected_layout, _) =
-        sway_configurator::config::detect::system_keyboard_layout();
-    let (sway_layout, _, _) =
-        sway_configurator::config::detect::sway_config_keyboard_defaults();
-    let expected = if !sway_layout.is_empty() { sway_layout } else { expected_layout };
+    let (expected_layout, _) = sway_configurator::config::detect::system_keyboard_layout();
+    let (sway_layout, _, _) = sway_configurator::config::detect::sway_config_keyboard_defaults();
+    let expected = if !sway_layout.is_empty() {
+        sway_layout
+    } else {
+        expected_layout
+    };
     assert_eq!(config.xkb_layout, expected);
     assert_eq!(config.repeat_delay, 600);
     assert_eq!(config.repeat_rate, 25);

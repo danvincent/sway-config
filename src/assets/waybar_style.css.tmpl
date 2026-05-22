@@ -4,8 +4,8 @@
 * {
     border: none;
     border-radius: 0;
-    font-family: "${FONT_FAMILY}", "Font Awesome 6 Free";
-    font-size: ${FONT_SIZE}px;
+    font-family: "${FONT_FAMILY}", "Font Awesome 6 Free" !important;
+    font-size: ${FONT_SIZE}px !important;
     min-height: 0;
 }
 
@@ -13,8 +13,15 @@ window#waybar {
     background-color: ${COLOR_BASE};
     color: ${COLOR_TEXT};
     opacity: ${WAYBAR_OPACITY};
+    font-family: "${FONT_FAMILY}", "Font Awesome 6 Free" !important;
+    font-size: ${FONT_SIZE}px !important;
     transition-property: background-color;
     transition-duration: 0.3s;
+}
+
+window#waybar * {
+    font-family: "${FONT_FAMILY}", "Font Awesome 6 Free" !important;
+    font-size: ${FONT_SIZE}px !important;
 }
 
 window#waybar.hidden {

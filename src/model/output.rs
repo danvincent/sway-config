@@ -65,9 +65,9 @@ impl OutputConfig {
             width: mode.width,
             height: mode.height,
         });
-        
+
         let refresh_rate = output.current_mode.as_ref().map(|mode| mode.refresh);
-        
+
         let transform = match output.transform.as_str() {
             "90" => Transform::Rotate90,
             "180" => Transform::Rotate180,
@@ -78,7 +78,7 @@ impl OutputConfig {
             "flipped-270" => Transform::Flipped270,
             _ => Transform::Normal,
         };
-        
+
         OutputConfig {
             name: output.name.clone(),
             enabled: output.active,
@@ -97,52 +97,52 @@ impl OutputConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_transform_default() {
         assert_eq!(Transform::default(), Transform::Normal);
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_normal() {
         assert_eq!(Transform::Normal.to_sway_str(), "normal");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_rotate90() {
         assert_eq!(Transform::Rotate90.to_sway_str(), "90");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_rotate180() {
         assert_eq!(Transform::Rotate180.to_sway_str(), "180");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_rotate270() {
         assert_eq!(Transform::Rotate270.to_sway_str(), "270");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_flipped() {
         assert_eq!(Transform::Flipped.to_sway_str(), "flipped");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_flipped90() {
         assert_eq!(Transform::Flipped90.to_sway_str(), "flipped-90");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_flipped180() {
         assert_eq!(Transform::Flipped180.to_sway_str(), "flipped-180");
     }
-    
+
     #[test]
     fn test_transform_to_sway_str_flipped270() {
         assert_eq!(Transform::Flipped270.to_sway_str(), "flipped-270");
     }
-    
+
     #[test]
     fn test_output_config_serialization() {
         let config = OutputConfig {
@@ -157,11 +157,11 @@ mod tests {
             scale: 1.0,
             transform: Transform::Normal,
         };
-        
+
         let json = serde_json::to_string(&config).expect("Failed to serialize");
         let deserialized: OutputConfig =
             serde_json::from_str(&json).expect("Failed to deserialize");
-        
+
         assert_eq!(config, deserialized);
     }
 }

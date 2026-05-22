@@ -1,7 +1,7 @@
+use crate::model::input::AccelProfile;
+use crate::model::settings::Settings;
 /// Intermediate render model - generated from settings, separate from editable state
 use serde::{Deserialize, Serialize};
-use crate::model::settings::Settings;
-use crate::model::input::AccelProfile;
 
 /// Complete render model with all configuration sections
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,7 +118,11 @@ impl RenderModel {
 
         // Render keyboards
         for keyboard in &settings.keyboards {
-            let layout = if keyboard.xkb_layout.is_empty() { "us" } else { &keyboard.xkb_layout };
+            let layout = if keyboard.xkb_layout.is_empty() {
+                "us"
+            } else {
+                &keyboard.xkb_layout
+            };
             let mut lines = vec![format!("input \"{}\" {{", keyboard.identifier)];
             lines.push(format!("    xkb_layout {}", layout));
             if !keyboard.xkb_variant.is_empty() {
@@ -145,11 +149,27 @@ impl RenderModel {
                 AccelProfile::Flat => "flat",
             };
 
-            let tap_str = if touchpad.tap_to_click { "enabled" } else { "disabled" };
-            let scroll_str = if touchpad.natural_scroll { "enabled" } else { "disabled" };
+            let tap_str = if touchpad.tap_to_click {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            let scroll_str = if touchpad.natural_scroll {
+                "enabled"
+            } else {
+                "disabled"
+            };
             let dwt_str = if touchpad.dwt { "enabled" } else { "disabled" };
-            let left_str = if touchpad.left_handed { "enabled" } else { "disabled" };
-            let middle_str = if touchpad.middle_emulation { "enabled" } else { "disabled" };
+            let left_str = if touchpad.left_handed {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            let middle_str = if touchpad.middle_emulation {
+                "enabled"
+            } else {
+                "disabled"
+            };
 
             let sway_directive = format!(
                 "input \"{}\" {{\n    tap {}\n    natural_scroll {}\n    dwt {}\n    accel_speed {}\n    accel_profile {}\n    left_handed {}\n    middle_emulation {}\n}}",
@@ -171,9 +191,10 @@ impl RenderModel {
 
         // Render idle configuration
         let idle = if settings.idle.lock_timeout > 0 {
-            let mut exec_parts = vec![
-                format!("timeout {} '{}'", settings.idle.lock_timeout, settings.idle.lock_command),
-            ];
+            let mut exec_parts = vec![format!(
+                "timeout {} '{}'",
+                settings.idle.lock_timeout, settings.idle.lock_command
+            )];
 
             if settings.idle.before_sleep {
                 exec_parts.push(format!("before-sleep '{}'", settings.idle.lock_command));
@@ -234,8 +255,8 @@ impl RenderModel {
 
             // "tray" as a top-level key must be an object — omit it entirely;
             // the tray module is already included in modules-right when enabled.
-            let config_json = serde_json::to_string_pretty(&json_obj)
-                .unwrap_or_else(|_| "{}".to_string());
+            let config_json =
+                serde_json::to_string_pretty(&json_obj).unwrap_or_else(|_| "{}".to_string());
 
             Some(RenderedWaybar { config_json })
         } else {
@@ -352,8 +373,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&model).expect("Failed to serialize");
-        let deserialized: RenderModel =
-            serde_json::from_str(&json).expect("Failed to deserialize");
+        let deserialized: RenderModel = serde_json::from_str(&json).expect("Failed to deserialize");
 
         assert_eq!(model, deserialized);
     }
@@ -365,7 +385,10 @@ mod tests {
         settings.outputs = vec![OutputConfig {
             name: "HDMI-1".to_string(),
             enabled: true,
-            resolution: Some(Resolution { width: 1920, height: 1080 }),
+            resolution: Some(Resolution {
+                width: 1920,
+                height: 1080,
+            }),
             refresh_rate: Some(144000),
             position: Position { x: 0, y: 0 },
             scale: 1.0,
@@ -388,18 +411,26 @@ mod tests {
             settings.outputs = vec![OutputConfig {
                 name: "DP-1".to_string(),
                 enabled: true,
-                resolution: Some(Resolution { width: w, height: h }),
+                resolution: Some(Resolution {
+                    width: w,
+                    height: h,
+                }),
                 refresh_rate: Some(60000),
                 position: Position { x: 0, y: 0 },
                 scale: 1.0,
                 transform: Transform::Normal,
             }];
-            RenderModel::from_settings(&settings).outputs[0].sway_directive.clone()
+            RenderModel::from_settings(&settings).outputs[0]
+                .sway_directive
+                .clone()
         };
 
         let d1080 = make_settings(1920, 1080);
         let d1440 = make_settings(2560, 1440);
-        assert_ne!(d1080, d1440, "different resolutions must produce different directives");
+        assert_ne!(
+            d1080, d1440,
+            "different resolutions must produce different directives"
+        );
         assert!(d1080.contains("1920x1080"), "1080p directive: {d1080}");
         assert!(d1440.contains("2560x1440"), "1440p directive: {d1440}");
     }
@@ -411,7 +442,10 @@ mod tests {
         settings.outputs = vec![OutputConfig {
             name: "eDP-1".to_string(),
             enabled: true,
-            resolution: Some(Resolution { width: 1920, height: 1080 }),
+            resolution: Some(Resolution {
+                width: 1920,
+                height: 1080,
+            }),
             refresh_rate: None,
             position: Position { x: 0, y: 0 },
             scale: 1.0,
@@ -463,7 +497,9 @@ mod tests {
                 repeat_delay: 600,
                 repeat_rate: 25,
             }];
-            RenderModel::from_settings(&settings).inputs[0].sway_directive.clone()
+            RenderModel::from_settings(&settings).inputs[0]
+                .sway_directive
+                .clone()
         };
 
         let gb = make("gb");
@@ -475,4 +511,3 @@ mod tests {
         assert!(us.contains("xkb_layout us"), "us directive: {us}");
     }
 }
-

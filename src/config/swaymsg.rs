@@ -1,6 +1,6 @@
+use std::io;
 /// Sway message wrapper - low-level swaymsg command invocation
 use std::process::Command;
-use std::io;
 
 /// Errors that can occur when communicating with Sway
 #[derive(Debug)]
@@ -24,7 +24,9 @@ impl PartialEq for SwayError {
         match (self, other) {
             (SwayError::NotRunning, SwayError::NotRunning) => true,
             (SwayError::ParseError(a), SwayError::ParseError(b)) => a == b,
-            (SwayError::IoError(a), SwayError::IoError(b)) => a.kind() == b.kind() && a.to_string() == b.to_string(),
+            (SwayError::IoError(a), SwayError::IoError(b)) => {
+                a.kind() == b.kind() && a.to_string() == b.to_string()
+            }
             _ => false,
         }
     }
@@ -45,16 +47,13 @@ fn run_swaymsg(type_arg: &str) -> Result<String, SwayError> {
     if !is_sway_running() {
         return Err(SwayError::NotRunning);
     }
-    
-    let output = Command::new("swaymsg")
-        .arg("-t")
-        .arg(type_arg)
-        .output()?;
-    
+
+    let output = Command::new("swaymsg").arg("-t").arg(type_arg).output()?;
+
     if !output.status.success() {
         return Err(SwayError::NotRunning);
     }
-    
+
     String::from_utf8(output.stdout)
         .map_err(|e| SwayError::IoError(io::Error::new(io::ErrorKind::InvalidData, e)))
 }
@@ -78,7 +77,7 @@ pub fn get_inputs() -> Result<Vec<crate::config::detect::SwayInput>, SwayError> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_is_sway_running_returns_bool() {
         let _result = is_sway_running();

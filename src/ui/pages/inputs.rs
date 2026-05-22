@@ -37,7 +37,10 @@ pub fn accel_profile_index(p: AccelProfile) -> u32 {
 
 /// AccelProfile from a ComboRow selected index.
 pub fn accel_profile_from_index(idx: u32) -> AccelProfile {
-    ACCEL_PROFILES.get(idx as usize).copied().unwrap_or(AccelProfile::Adaptive)
+    ACCEL_PROFILES
+        .get(idx as usize)
+        .copied()
+        .unwrap_or(AccelProfile::Adaptive)
 }
 
 // ─── GTK page ─────────────────────────────────────────────────────────────────
@@ -61,19 +64,22 @@ impl InputsPage {
 
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
-        clamp.set_tightening_threshold(600);
 
-        let groups_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
+        let groups_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
         groups_box.set_margin_start(12);
         groups_box.set_margin_end(12);
-        groups_box.set_margin_top(24);
-        groups_box.set_margin_bottom(24);
+        groups_box.set_margin_top(12);
+        groups_box.set_margin_bottom(12);
 
         clamp.set_child(Some(&groups_box));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
 
-        InputsPage { widget, groups_box, app_state }
+        InputsPage {
+            widget,
+            groups_box,
+            app_state,
+        }
     }
 
     /// Detect and load inputs into the page
@@ -136,7 +142,11 @@ impl InputsPage {
         }
     }
 
-    fn build_keyboard_group(&self, kb: &KeyboardConfig, idx: usize) -> libadwaita::PreferencesGroup {
+    fn build_keyboard_group(
+        &self,
+        kb: &KeyboardConfig,
+        idx: usize,
+    ) -> libadwaita::PreferencesGroup {
         let group = libadwaita::PreferencesGroup::new();
         group.set_title("Keyboard");
 
@@ -229,7 +239,11 @@ impl InputsPage {
         group
     }
 
-    fn build_touchpad_group(&self, tp: &TouchpadConfig, idx: usize) -> libadwaita::PreferencesGroup {
+    fn build_touchpad_group(
+        &self,
+        tp: &TouchpadConfig,
+        idx: usize,
+    ) -> libadwaita::PreferencesGroup {
         let group = libadwaita::PreferencesGroup::new();
         group.set_title("Touchpad");
 
@@ -267,7 +281,11 @@ impl InputsPage {
         let left_row = add_switch!("Left-Handed Mode", tp.left_handed, left_handed);
         expander.add_row(&left_row);
 
-        let middle_row = add_switch!("Middle Button Emulation", tp.middle_emulation, middle_emulation);
+        let middle_row = add_switch!(
+            "Middle Button Emulation",
+            tp.middle_emulation,
+            middle_emulation
+        );
         expander.add_row(&middle_row);
 
         // ── Accel speed ──
@@ -288,9 +306,8 @@ impl InputsPage {
         expander.add_row(&accel_speed_row);
 
         // ── Accel profile ──
-        let profile_strings: gtk4::StringList = gtk4::StringList::new(
-            &ACCEL_PROFILES.map(accel_profile_label),
-        );
+        let profile_strings: gtk4::StringList =
+            gtk4::StringList::new(&ACCEL_PROFILES.map(accel_profile_label));
         let profile_row = libadwaita::ComboRow::new();
         profile_row.set_title("Acceleration Profile");
         profile_row.set_model(Some(&profile_strings));
@@ -327,4 +344,3 @@ impl Default for InputsPage {
 
 #[cfg(not(feature = "gtk"))]
 pub struct InputsPage;
-

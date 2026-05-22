@@ -1,14 +1,14 @@
+use crate::config::render::render_and_apply;
+use crate::config::store::SettingsStore;
+use crate::state::AppState;
+use crate::ui::apply_bar::ApplyBar;
+use crate::ui::pages::*;
 /// Main application window
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
-use crate::config::render::render_and_apply;
-use crate::config::store::SettingsStore;
-use crate::state::AppState;
-use crate::ui::pages::*;
-use crate::ui::apply_bar::ApplyBar;
 
 /// Main application window with sidebar navigation and content area
 pub struct SwayConfigWindow {
@@ -69,9 +69,9 @@ impl SwayConfigWindow {
         let list_box = gtk4::ListBox::new();
         list_box.set_selection_mode(gtk4::SelectionMode::Single);
 
-        // Add page items in order: Outputs, Inputs, Idle, Waybar, Autostart, Notifications, Themes, General
+        // Add page items in order: Displays, Inputs, Idle, Waybar, Autostart, Notifications, Themes, General
         let page_configs = vec![
-            ("Outputs", "outputs"),
+            ("Displays", "outputs"),
             ("Inputs", "inputs"),
             ("Idle", "idle"),
             ("Waybar", "waybar"),
@@ -180,7 +180,7 @@ impl SwayConfigWindow {
 
         // Setup initial state visibility
         window_obj.update_apply_bar_visibility();
-        
+
         // Select the first row by default and trigger on_navigate
         if let Some(first_row) = window_obj.list_box.row_at_index(0) {
             window_obj.list_box.select_row(Some(&first_row));
@@ -227,23 +227,24 @@ impl SwayConfigWindow {
             let apply_bar = self.apply_bar.clone();
             let app_state = self.app_state.clone();
 
-            self.stack.connect_notify_local(Some("visible-child-name"), move |stack, _| {
-                if let Some(name) = stack.visible_child_name() {
-                    match name.as_str() {
-                        "outputs" => outputs_page.on_navigate(),
-                        "inputs" => inputs_page.on_navigate(),
-                        "idle" => idle_page.on_navigate(),
-                        "waybar" => waybar_page.on_navigate(),
-                        "autostart" => autostart_page.on_navigate(),
-                        "notifications" => notifications_page.on_navigate(),
-                        "themes" => themes_page.on_navigate(),
-                        "general" => general_page.on_navigate(),
-                        _ => {}
+            self.stack
+                .connect_notify_local(Some("visible-child-name"), move |stack, _| {
+                    if let Some(name) = stack.visible_child_name() {
+                        match name.as_str() {
+                            "outputs" => outputs_page.on_navigate(),
+                            "inputs" => inputs_page.on_navigate(),
+                            "idle" => idle_page.on_navigate(),
+                            "waybar" => waybar_page.on_navigate(),
+                            "autostart" => autostart_page.on_navigate(),
+                            "notifications" => notifications_page.on_navigate(),
+                            "themes" => themes_page.on_navigate(),
+                            "general" => general_page.on_navigate(),
+                            _ => {}
+                        }
                     }
-                }
-                // refresh apply bar after any state changes from on_navigate
-                apply_bar.set_visible(app_state.borrow().is_dirty());
-            });
+                    // refresh apply bar after any state changes from on_navigate
+                    apply_bar.set_visible(app_state.borrow().is_dirty());
+                });
         }
     }
 
@@ -255,8 +256,10 @@ impl SwayConfigWindow {
             let toast_overlay = self.toast_overlay.clone();
             let apply_bar = self.apply_bar.clone();
             let store_path = self.store_path.clone();
+            let themes_page = Rc::clone(&self.themes_page);
 
             self.apply_bar.button_apply().connect_clicked(move |_| {
+                themes_page.sync_overrides_into_state();
                 let result = {
                     let state = app_state.borrow();
                     render_and_apply(&state)
@@ -265,7 +268,10 @@ impl SwayConfigWindow {
                 if result.success {
                     // Persist settings.toml so Revert can return to this state
                     let settings = app_state.borrow().settings().clone();
-                    let store = SettingsStore { path: store_path.clone(), settings };
+                    let store = SettingsStore {
+                        path: store_path.clone(),
+                        settings,
+                    };
                     if let Err(e) = store.save() {
                         let msg = format!("Applied to sway but failed to save settings: {e}");
                         toast_overlay.add_toast(libadwaita::Toast::new(&msg));
@@ -353,7 +359,7 @@ impl SwayConfigWindow {
     pub fn navigate_to(&self, page_id: &str) {
         *self.current_page.borrow_mut() = page_id.to_string();
         self.stack.set_visible_child_name(page_id);
-        
+
         // Select the corresponding row in the list box
         let page_ids = crate::ui::pages::page_ids();
         if let Some(index) = page_ids.iter().position(|&id| id == page_id) {

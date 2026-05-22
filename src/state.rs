@@ -56,7 +56,9 @@ impl AppState {
         let was_clean = !self.dirty;
         self.dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -116,7 +118,9 @@ impl AppState {
         self.dirty = true;
         self.outputs_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -127,7 +131,9 @@ impl AppState {
         self.dirty = true;
         self.keyboards_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -138,7 +144,9 @@ impl AppState {
         self.dirty = true;
         self.touchpads_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -164,7 +172,9 @@ impl AppState {
         self.dirty = true;
         self.outputs_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -175,7 +185,9 @@ impl AppState {
         self.dirty = true;
         self.keyboards_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -186,7 +198,9 @@ impl AppState {
         self.dirty = true;
         self.touchpads_dirty = true;
         if was_clean {
-            if let Some(ref f) = self.dirty_listener.clone() { f(); }
+            if let Some(ref f) = self.dirty_listener.clone() {
+                f();
+            }
         }
     }
 
@@ -212,10 +226,10 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::theme::ThemeSelection;
-    use crate::model::output::OutputConfig;
     use crate::model::input::KeyboardConfig;
     use crate::model::input::TouchpadConfig;
+    use crate::model::output::OutputConfig;
+    use crate::model::theme::ThemeSelection;
 
     #[test]
     fn test_app_state_default() {
@@ -245,7 +259,7 @@ mod tests {
     fn test_app_state_settings_access() {
         let mut settings = Settings::default();
         settings.theme = Some(ThemeSelection::new("dark", "system"));
-        
+
         let state = AppState::new(settings);
         assert_eq!(state.settings().theme.as_ref().unwrap().name, "dark");
     }
@@ -254,7 +268,7 @@ mod tests {
     fn test_app_state_settings_mut_access() {
         let settings = Settings::default();
         let mut state = AppState::new(settings);
-        
+
         state.settings_mut().theme = Some(ThemeSelection::new("light", "custom"));
         assert_eq!(state.settings().theme.as_ref().unwrap().name, "light");
     }
@@ -263,7 +277,7 @@ mod tests {
     fn test_set_outputs_updates_settings_and_marks_dirty() {
         let mut state = AppState::new(Settings::default());
         assert!(!state.is_dirty());
-        
+
         let output = OutputConfig {
             name: "HDMI-1".to_string(),
             enabled: true,
@@ -274,7 +288,7 @@ mod tests {
             transform: crate::model::output::Transform::Normal,
         };
         state.set_outputs(vec![output]);
-        
+
         assert!(state.is_dirty());
         assert_eq!(state.settings().outputs.len(), 1);
     }
@@ -282,7 +296,7 @@ mod tests {
     #[test]
     fn test_set_keyboards_updates_settings_and_marks_dirty() {
         let mut state = AppState::new(Settings::default());
-        
+
         let keyboard = KeyboardConfig {
             identifier: "kbd".to_string(),
             xkb_layout: "us".to_string(),
@@ -292,7 +306,7 @@ mod tests {
             repeat_rate: 25,
         };
         state.set_keyboards(vec![keyboard]);
-        
+
         assert!(state.is_dirty());
         assert_eq!(state.settings().keyboards.len(), 1);
     }
@@ -300,7 +314,7 @@ mod tests {
     #[test]
     fn test_set_touchpads_updates_settings_and_marks_dirty() {
         let mut state = AppState::new(Settings::default());
-        
+
         let touchpad = TouchpadConfig {
             identifier: "pad".to_string(),
             tap_to_click: false,
@@ -312,7 +326,7 @@ mod tests {
             middle_emulation: false,
         };
         state.set_touchpads(vec![touchpad]);
-        
+
         assert!(state.is_dirty());
         assert_eq!(state.settings().touchpads.len(), 1);
     }
@@ -403,7 +417,10 @@ mod tests {
 
         assert!(state.is_dirty(), "global dirty set");
         assert!(state.is_keyboards_dirty());
-        assert!(!state.is_outputs_dirty(), "outputs must still be clean — detection should proceed");
+        assert!(
+            !state.is_outputs_dirty(),
+            "outputs must still be clean — detection should proceed"
+        );
     }
 
     #[test]
@@ -422,8 +439,14 @@ mod tests {
 
         assert!(state.is_dirty(), "global dirty set");
         assert!(state.is_outputs_dirty());
-        assert!(!state.is_keyboards_dirty(), "keyboards must still be clean — inputs detection should proceed");
-        assert!(!state.is_touchpads_dirty(), "touchpads must still be clean — inputs detection should proceed");
+        assert!(
+            !state.is_keyboards_dirty(),
+            "keyboards must still be clean — inputs detection should proceed"
+        );
+        assert!(
+            !state.is_touchpads_dirty(),
+            "touchpads must still be clean — inputs detection should proceed"
+        );
     }
 
     #[test]
@@ -464,7 +487,10 @@ mod tests {
         state.mark_outputs_dirty();
 
         assert!(state.is_dirty(), "global dirty must be set");
-        assert!(state.is_outputs_dirty(), "outputs section dirty must be set");
+        assert!(
+            state.is_outputs_dirty(),
+            "outputs section dirty must be set"
+        );
         assert!(!state.is_keyboards_dirty(), "keyboards must be unaffected");
         assert!(!state.is_touchpads_dirty(), "touchpads must be unaffected");
     }

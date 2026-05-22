@@ -9,13 +9,15 @@ use sway_configurator::ui::SwayConfigWindow;
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let app = libadwaita::Application::new(Some("com.github.danvincent.sway-configurator"), Default::default());
-    
+    let app = libadwaita::Application::new(
+        Some("com.github.danvincent.sway-configurator"),
+        Default::default(),
+    );
+
     app.connect_activate(|app| {
         let store = if std::env::var("SWAY_CONFIGURATOR_TEST").as_deref() == Ok("1") {
             let test_dir = std::env::temp_dir().join("sway-configurator-test-run");
-            std::fs::create_dir_all(&test_dir)
-                .expect("Failed to create test directory");
+            std::fs::create_dir_all(&test_dir).expect("Failed to create test directory");
             tracing::info!("Test mode: using {}", test_dir.display());
             SettingsStore::test_store(&test_dir)
         } else {

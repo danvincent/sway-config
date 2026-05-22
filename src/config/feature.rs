@@ -58,9 +58,7 @@ pub fn has_network_manager() -> bool {
 /// Returns true if a notification daemon is running/installed
 /// Checks for: dunst, mako, swaync
 pub fn has_notification_daemon() -> bool {
-    which::which("dunst").is_ok()
-        || which::which("mako").is_ok()
-        || which::which("swaync").is_ok()
+    which::which("dunst").is_ok() || which::which("mako").is_ok() || which::which("swaync").is_ok()
 }
 
 #[cfg(test)]

@@ -1,13 +1,13 @@
+use crate::model::autostart::AutostartConfig;
+use crate::model::general::GeneralConfig;
+use crate::model::idle::IdleConfig;
+use crate::model::input::{KeyboardConfig, TouchpadConfig};
+use crate::model::notifications::NotificationsConfig;
+use crate::model::output::OutputConfig;
+use crate::model::theme::{ThemeOverrides, ThemeSelection};
+use crate::model::waybar::WaybarConfig;
 /// Settings model - editable user configuration
 use serde::{Deserialize, Serialize};
-use crate::model::theme::{ThemeSelection, ThemeOverrides};
-use crate::model::output::OutputConfig;
-use crate::model::input::{KeyboardConfig, TouchpadConfig};
-use crate::model::idle::IdleConfig;
-use crate::model::waybar::WaybarConfig;
-use crate::model::autostart::AutostartConfig;
-use crate::model::notifications::NotificationsConfig;
-use crate::model::general::GeneralConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -70,18 +70,23 @@ mod tests {
     fn test_settings_custom_themes_path_roundtrip() {
         let mut settings = Settings::default();
         settings.custom_themes_path = Some("/home/user/my-themes".to_string());
-        
+
         let toml_str = toml::to_string_pretty(&settings).unwrap();
         let reloaded: Settings = toml::from_str(&toml_str).unwrap();
-        assert_eq!(reloaded.custom_themes_path, Some("/home/user/my-themes".to_string()));
+        assert_eq!(
+            reloaded.custom_themes_path,
+            Some("/home/user/my-themes".to_string())
+        );
     }
 
     #[test]
     fn test_settings_custom_themes_path_none_not_serialized() {
         let settings = Settings::default(); // custom_themes_path = None
         let toml_str = toml::to_string_pretty(&settings).unwrap();
-        assert!(!toml_str.contains("custom_themes_path"),
-            "None custom_themes_path should not appear in serialized TOML");
+        assert!(
+            !toml_str.contains("custom_themes_path"),
+            "None custom_themes_path should not appear in serialized TOML"
+        );
     }
 
     #[test]

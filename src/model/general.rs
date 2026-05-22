@@ -42,7 +42,9 @@ mod tests {
     fn test_general_config_empty_terminal_not_serialized() {
         let config = GeneralConfig::default();
         let toml_str = toml::to_string_pretty(&config).unwrap();
-        assert!(!toml_str.contains("terminal"),
-            "Empty terminal should not appear in serialized TOML");
+        assert!(
+            !toml_str.contains("terminal"),
+            "Empty terminal should not appear in serialized TOML"
+        );
     }
 }

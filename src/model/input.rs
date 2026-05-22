@@ -94,26 +94,24 @@ impl TouchpadConfig {
     /// Create TouchpadConfig from a detected Sway input (touchpad type)
     pub fn from_sway(input: &crate::config::detect::SwayInput) -> Self {
         let libinput = input.libinput.as_ref();
-        
+
         let tap_to_click = libinput
             .and_then(|cfg| cfg.tap.as_ref())
             .map(|s| s == "enabled")
             .unwrap_or(false);
-        
+
         let natural_scroll = libinput
             .and_then(|cfg| cfg.natural_scroll.as_ref())
             .map(|s| s == "enabled")
             .unwrap_or(false);
-        
+
         let dwt = libinput
             .and_then(|cfg| cfg.dwt.as_ref())
             .map(|s| s == "enabled")
             .unwrap_or(false);
-        
-        let accel_speed = libinput
-            .and_then(|cfg| cfg.accel_speed)
-            .unwrap_or(0.0);
-        
+
+        let accel_speed = libinput.and_then(|cfg| cfg.accel_speed).unwrap_or(0.0);
+
         let accel_profile = libinput
             .and_then(|cfg| cfg.accel_profile.as_ref())
             .map(|s| {
@@ -124,17 +122,17 @@ impl TouchpadConfig {
                 }
             })
             .unwrap_or(AccelProfile::Adaptive);
-        
+
         let left_handed = libinput
             .and_then(|cfg| cfg.left_handed.as_ref())
             .map(|s| s == "enabled")
             .unwrap_or(false);
-        
+
         let middle_emulation = libinput
             .and_then(|cfg| cfg.middle_emulation.as_ref())
             .map(|s| s == "enabled")
             .unwrap_or(false);
-        
+
         TouchpadConfig {
             identifier: input.identifier.clone(),
             tap_to_click,
@@ -151,7 +149,7 @@ impl TouchpadConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_keyboard_config_defaults() {
         let config = KeyboardConfig {
@@ -162,17 +160,17 @@ mod tests {
             repeat_delay: default_repeat_delay(),
             repeat_rate: default_repeat_rate(),
         };
-        
+
         assert_eq!(config.xkb_layout, "us");
         assert_eq!(config.repeat_delay, 600);
         assert_eq!(config.repeat_rate, 25);
     }
-    
+
     #[test]
     fn test_accel_profile_default() {
         assert_eq!(AccelProfile::default(), AccelProfile::Adaptive);
     }
-    
+
     #[test]
     fn test_touchpad_config_serialization() {
         let config = TouchpadConfig {
@@ -185,11 +183,11 @@ mod tests {
             left_handed: false,
             middle_emulation: false,
         };
-        
+
         let json = serde_json::to_string(&config).expect("Failed to serialize");
         let deserialized: TouchpadConfig =
             serde_json::from_str(&json).expect("Failed to deserialize");
-        
+
         assert_eq!(config, deserialized);
     }
 }

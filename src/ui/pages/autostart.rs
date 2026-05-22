@@ -37,6 +37,10 @@ pub fn remove_entry(entries: &mut Vec<AutostartEntry>, id: &str) -> bool {
 // ── GTK page ──────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "gtk")]
+use crate::model::autostart::AutostartConfig;
+#[cfg(feature = "gtk")]
+use crate::state::AppState;
+#[cfg(feature = "gtk")]
 use gtk4::prelude::*;
 #[cfg(feature = "gtk")]
 use libadwaita::prelude::*;
@@ -44,10 +48,6 @@ use libadwaita::prelude::*;
 use std::cell::RefCell;
 #[cfg(feature = "gtk")]
 use std::rc::Rc;
-#[cfg(feature = "gtk")]
-use crate::model::autostart::AutostartConfig;
-#[cfg(feature = "gtk")]
-use crate::state::AppState;
 
 /// Autostart page - for managing autostart programs
 #[cfg(feature = "gtk")]
@@ -64,15 +64,19 @@ impl AutostartPage {
     /// Create a new autostart page
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        
+
         let scrolled = gtk4::ScrolledWindow::new();
         scrolled.set_hexpand(true);
         scrolled.set_vexpand(true);
-        
+
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
-        
-        let prefs_page = libadwaita::PreferencesPage::new();
+
+        let outer_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        outer_box.set_margin_start(12);
+        outer_box.set_margin_end(12);
+        outer_box.set_margin_top(12);
+        outer_box.set_margin_bottom(12);
 
         // ── Main group ─────────────────────────────────────────────────────────
         let group = libadwaita::PreferencesGroup::new();
@@ -89,8 +93,8 @@ impl AutostartPage {
         list_box.set_selection_mode(gtk4::SelectionMode::None);
         group.add(&list_box);
 
-        prefs_page.add(&group);
-        clamp.set_child(Some(&prefs_page));
+        outer_box.append(&group);
+        clamp.set_child(Some(&outer_box));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
 
@@ -104,15 +108,16 @@ impl AutostartPage {
             });
         }
 
-        AutostartPage { widget, list_box, add_button, app_state }
+        AutostartPage {
+            widget,
+            list_box,
+            add_button,
+            app_state,
+        }
     }
 
     /// Show an add-program dialog and, on confirm, add the entry to state + UI.
-    fn show_add_dialog(
-        parent: &gtk4::Box,
-        state: Rc<RefCell<AppState>>,
-        list_box: gtk4::ListBox,
-    ) {
+    fn show_add_dialog(parent: &gtk4::Box, state: Rc<RefCell<AppState>>, list_box: gtk4::ListBox) {
         let dialog = libadwaita::AlertDialog::new(
             Some("Add Autostart Program"),
             Some("Enter the command to run at startup"),
@@ -143,17 +148,26 @@ impl AutostartPage {
             let desc_entry = desc_entry.clone();
             let parent_widget = parent.upcast_ref::<gtk4::Widget>().clone();
             dialog.connect_response(None, move |_, response| {
-                if response != "add" { return; }
+                if response != "add" {
+                    return;
+                }
                 let cmd = cmd_entry.text().to_string();
                 let cmd = cmd.trim().to_string();
-                if cmd.is_empty() { return; }
+                if cmd.is_empty() {
+                    return;
+                }
                 let desc = desc_entry.text().to_string();
                 let entry = make_entry(&cmd, &desc);
                 // Append row to UI
                 let row = Self::build_row(&entry, Rc::clone(&state), list_box.clone());
                 list_box.append(&row);
                 // Update state
-                state.borrow_mut().settings_mut().autostart.entries.push(entry);
+                state
+                    .borrow_mut()
+                    .settings_mut()
+                    .autostart
+                    .entries
+                    .push(entry);
                 state.borrow_mut().mark_dirty();
                 let _ = parent_widget; // keep alive
             });
@@ -216,13 +230,13 @@ impl AutostartPage {
 
         row
     }
-    
+
     /// Navigate to this page - load autostart config from app_state
     pub fn on_navigate(&self) {
         let config = self.app_state.borrow().settings().autostart.clone();
         self.load_autostart(&config);
     }
-    
+
     /// Load autostart configuration into the page
     pub fn load_autostart(&self, config: &AutostartConfig) {
         while let Some(child) = self.list_box.first_child() {

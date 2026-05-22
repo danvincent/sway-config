@@ -1,6 +1,6 @@
+use crate::config::swaymsg;
 /// Sway session detection - higher-level wrapper around swaymsg
 use serde::{Deserialize, Serialize};
-use crate::config::swaymsg;
 
 /// Represents a single output/display from Sway
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -131,9 +131,10 @@ pub fn detect_touchpads(inputs: &[SwayInput]) -> Vec<&SwayInput> {
 /// `input * { ... }` blocks and extracts xkb_layout, xkb_variant, xkb_options.
 /// Returns `(layout, variant, options)` — all default to empty string if not found.
 pub fn sway_config_keyboard_defaults() -> (String, String, String) {
-    sway_config_keyboard_defaults_from_path(
-        &format!("{}/.config/sway/config", std::env::var("HOME").unwrap_or_default())
-    )
+    sway_config_keyboard_defaults_from_path(&format!(
+        "{}/.config/sway/config",
+        std::env::var("HOME").unwrap_or_default()
+    ))
 }
 
 pub fn sway_config_keyboard_defaults_from_path(path: &str) -> (String, String, String) {
@@ -162,8 +163,12 @@ pub fn sway_config_keyboard_defaults_from_path(path: &str) -> (String, String, S
         }
 
         for ch in trimmed.chars() {
-            if ch == '{' { brace_depth += 1; }
-            if ch == '}' { brace_depth -= 1; }
+            if ch == '{' {
+                brace_depth += 1;
+            }
+            if ch == '}' {
+                brace_depth -= 1;
+            }
         }
         if brace_depth <= 0 {
             in_keyboard_block = false;
@@ -174,7 +179,9 @@ pub fn sway_config_keyboard_defaults_from_path(path: &str) -> (String, String, S
             layout = val.trim().trim_matches('"').to_string();
         } else if let Some(val) = trimmed.strip_prefix("xkb_variant ") {
             let v = val.trim().trim_matches('"').to_string();
-            if v != "none" { variant = v; }
+            if v != "none" {
+                variant = v;
+            }
         } else if let Some(val) = trimmed.strip_prefix("xkb_options ") {
             options = val.trim().trim_matches('"').to_string();
         }
@@ -182,8 +189,6 @@ pub fn sway_config_keyboard_defaults_from_path(path: &str) -> (String, String, S
 
     (layout, variant, options)
 }
-
-
 
 /// Read the system keyboard layout from /etc/default/keyboard.
 /// Returns `(layout, variant)` — layout defaults to "us", variant to "".
@@ -216,7 +221,7 @@ pub fn system_keyboard_layout_from_path(path: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_rect_deserialize() {
         let json = r#"{"x":0,"y":0,"width":1920,"height":1080}"#;
@@ -226,7 +231,7 @@ mod tests {
         assert_eq!(rect.width, 1920);
         assert_eq!(rect.height, 1080);
     }
-    
+
     #[test]
     fn test_mode_deserialize() {
         let json = r#"{"width":1920,"height":1080,"refresh":60000}"#;

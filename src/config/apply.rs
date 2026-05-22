@@ -101,7 +101,7 @@ pub fn apply(settings: &Settings, config: ApplyConfig, base_path: &Path) -> Appl
 
     // Check if waybar is actually enabled
     let has_waybar = !waybar_json.is_empty();
-    
+
     // For waybar, always write config.json, but use {} if disabled
     let waybar_json_output = if waybar_json.is_empty() {
         "{}".to_string()
@@ -122,7 +122,9 @@ pub fn apply(settings: &Settings, config: ApplyConfig, base_path: &Path) -> Appl
 
     // Track files that would be written
     for (path, _) in &files_to_write {
-        result.files_written.push(path.to_string_lossy().to_string());
+        result
+            .files_written
+            .push(path.to_string_lossy().to_string());
     }
 
     // If dry run, return here without writing
@@ -134,11 +136,9 @@ pub fn apply(settings: &Settings, config: ApplyConfig, base_path: &Path) -> Appl
     for (path, content) in files_to_write {
         if let Err(e) = write_file(&path, &content) {
             result.success = false;
-            result.errors.push(format!(
-                "Failed to write {}: {}",
-                path.display(),
-                e
-            ));
+            result
+                .errors
+                .push(format!("Failed to write {}: {}", path.display(), e));
         }
     }
 
@@ -150,11 +150,22 @@ pub fn apply(settings: &Settings, config: ApplyConfig, base_path: &Path) -> Appl
         }
     }
 
-    // Restart waybar if configured and successful so far
-    if config.restart_waybar && result.success && has_waybar {
-        result.waybar_restarted = restart_waybar();
-        if !result.waybar_restarted {
-            result.errors.push("Failed to restart waybar (may not be running)".to_string());
+    // Sync waybar process state if configured and successful so far:
+    // - enabled => restart/reload it
+    // - disabled => stop any running instance
+    if config.restart_waybar && result.success {
+        if has_waybar {
+            result.waybar_restarted = restart_waybar();
+            if !result.waybar_restarted {
+                result
+                    .errors
+                    .push("Failed to restart waybar (may not be running)".to_string());
+            }
+        } else {
+            result.waybar_restarted = stop_waybar();
+            if !result.waybar_restarted {
+                result.errors.push("Failed to stop waybar".to_string());
+            }
         }
     }
 
@@ -165,9 +176,7 @@ pub fn apply(settings: &Settings, config: ApplyConfig, base_path: &Path) -> Appl
 fn reload_sway() -> bool {
     use std::process::Command;
 
-    let output = Command::new("swaymsg")
-        .arg("reload")
-        .output();
+    let output = Command::new("swaymsg").arg("reload").output();
 
     match output {
         Ok(out) => out.status.success(),
@@ -175,37 +184,104 @@ fn reload_sway() -> bool {
     }
 }
 
-/// Restart waybar — uses systemd reload if available, otherwise kill by PID + swaymsg exec.
+/// Restart/reload waybar safely.
+/// Tries user-service reload first; otherwise sends SIGUSR2 to running waybar.
+/// Only launches a new instance when no waybar process is running.
 fn restart_waybar() -> bool {
     use std::process::Command;
 
-    // Try systemd reload first (ExecReload=kill -SIGUSR2 $MAINPID)
-    let reloaded = Command::new("systemctl")
-        .args(["--user", "reload", "waybar"])
+    // Try systemd reload first only when the user service is active.
+    // This avoids noisy "waybar.service is not active, cannot reload." stderr output.
+    let service_active = Command::new("systemctl")
+        .args(["--user", "is-active", "--quiet", "waybar.service"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
+
+    let reloaded = if service_active {
+        Command::new("systemctl")
+            .args(["--user", "reload", "waybar.service"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    } else {
+        false
+    };
 
     if reloaded {
         return true;
     }
 
-    // Kill any running waybar by PID, then relaunch via swaymsg (inherits Wayland env)
+    // Prefer in-place reload for non-systemd runs.
     if let Ok(output) = Command::new("pgrep").arg("waybar").output() {
         let pids = String::from_utf8_lossy(&output.stdout);
-        for pid_str in pids.split_whitespace() {
-            if let Ok(pid) = pid_str.parse::<u32>() {
-                let _ = Command::new("kill").arg(pid.to_string()).output();
+        if !pids.trim().is_empty() {
+            let mut any_ok = false;
+            for pid_str in pids.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    let ok = Command::new("kill")
+                        .args(["-USR2", &pid.to_string()])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    any_ok = any_ok || ok;
+                }
+            }
+            if any_ok {
+                return true;
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(300));
     }
 
+    // No running process (or signal failed): launch via swaymsg so env is correct.
     Command::new("swaymsg")
         .args(["exec", "waybar"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+/// Stop waybar if it is running. Returns true when no running instance remains.
+fn stop_waybar() -> bool {
+    use std::process::Command;
+
+    let service_active = Command::new("systemctl")
+        .args(["--user", "is-active", "--quiet", "waybar.service"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if service_active {
+        let stopped = Command::new("systemctl")
+            .args(["--user", "stop", "waybar.service"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if stopped {
+            return true;
+        }
+    }
+
+    if let Ok(output) = Command::new("pgrep").arg("waybar").output() {
+        let pids = String::from_utf8_lossy(&output.stdout);
+        if pids.trim().is_empty() {
+            return true;
+        }
+        for pid_str in pids.split_whitespace() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                let _ = Command::new("kill").arg(pid.to_string()).output();
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let still_running = Command::new("pgrep")
+            .arg("waybar")
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        return !still_running;
+    }
+
+    true
 }
 
 /// Parse a theme .env file into a variable map.
@@ -214,7 +290,9 @@ pub fn parse_env_file(content: &str) -> std::collections::HashMap<String, String
     let mut map = std::collections::HashMap::new();
     for line in content.lines() {
         let line = line.trim();
-        if line.starts_with('#') || line.is_empty() { continue; }
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
         if let Some((key, val)) = line.split_once('=') {
             let key = key.trim().to_string();
             let val = val.trim().trim_matches('"').to_string();
@@ -243,7 +321,9 @@ fn find_theme_path_by_name(name: &str) -> Option<String> {
         format!("{}/.config/sway/themes/{}.env", home, name),
         format!("{}/source/SwayConfig/themes/{}.env", home, name),
     ];
-    candidates.into_iter().find(|p| std::path::Path::new(p).exists())
+    candidates
+        .into_iter()
+        .find(|p| std::path::Path::new(p).exists())
 }
 
 /// Apply a theme — writes sway colors, waybar style.css, GTK settings, wallpaper.
@@ -277,7 +357,9 @@ pub fn apply_theme(
         Ok(c) => c,
         Err(e) => {
             result.success = false;
-            result.errors.push(format!("Cannot read theme file {}: {}", resolved_path, e));
+            result
+                .errors
+                .push(format!("Cannot read theme file {}: {}", resolved_path, e));
             return result;
         }
     };
@@ -285,42 +367,72 @@ pub fn apply_theme(
     let mut vars = parse_env_file(&env_content);
 
     // Apply overrides
-    if let Some(ref wp) = overrides.wallpaper { vars.insert("WALLPAPER_PATH".into(), wp.clone()); }
-    if let Some(ref ff) = overrides.font_family { vars.insert("FONT_FAMILY".into(), ff.clone()); }
-    if let Some(fs_) = overrides.font_size { vars.insert("FONT_SIZE".into(), fs_.to_string()); }
-    if let Some(gi) = overrides.gap_inner { vars.insert("GAP_INNER".into(), gi.to_string()); }
-    if let Some(go) = overrides.gap_outer { vars.insert("GAP_OUTER".into(), go.to_string()); }
-    if let Some(bw) = overrides.border_width { vars.insert("BORDER_WIDTH".into(), bw.to_string()); }
-    if let Some(wo) = overrides.waybar_opacity { vars.insert("WAYBAR_OPACITY".into(), format!("{:.2}", wo)); }
-    if let Some(to) = overrides.terminal_opacity { vars.insert("TERMINAL_OPACITY".into(), format!("{:.2}", to)); }
+    if let Some(ref wp) = overrides.wallpaper {
+        vars.insert("WALLPAPER_PATH".into(), wp.clone());
+    }
+    if let Some(ref ff) = overrides.font_family {
+        vars.insert("FONT_FAMILY".into(), ff.clone());
+    }
+    if let Some(fs_) = overrides.font_size {
+        vars.insert("FONT_SIZE".into(), fs_.to_string());
+    }
+    if let Some(gi) = overrides.gap_inner {
+        vars.insert("GAP_INNER".into(), gi.to_string());
+    }
+    if let Some(go) = overrides.gap_outer {
+        vars.insert("GAP_OUTER".into(), go.to_string());
+    }
+    if let Some(bw) = overrides.border_width {
+        vars.insert("BORDER_WIDTH".into(), bw.to_string());
+    }
+    if let Some(wo) = overrides.waybar_opacity {
+        vars.insert("WAYBAR_OPACITY".into(), format!("{:.2}", wo));
+    }
+    if let Some(to) = overrides.terminal_opacity {
+        vars.insert("TERMINAL_OPACITY".into(), format!("{:.2}", to));
+    }
 
     if dry_run {
-        result.files_written.push("(dry-run) sway colors, waybar style, gtk settings".into());
+        result
+            .files_written
+            .push("(dry-run) sway colors, waybar style, gtk settings".into());
         return result;
     }
 
     // Write ~/.config/sway-theme pointer
     let sway_theme_ptr = dirs_or_home("sway-theme", base_path);
     if let Err(e) = write_file(&sway_theme_ptr, &format!("{}\n", selection.path)) {
-        result.errors.push(format!("Failed to write sway-theme pointer: {}", e));
+        result
+            .errors
+            .push(format!("Failed to write sway-theme pointer: {}", e));
     } else {
-        result.files_written.push(sway_theme_ptr.to_string_lossy().into());
+        result
+            .files_written
+            .push(sway_theme_ptr.to_string_lossy().into());
     }
 
     // Write sway colors config
     let colors_conf = build_sway_colors_conf(&vars);
     let colors_path = base_path.join("sway/config.d/colors.conf");
     match write_file(&colors_path, &colors_conf) {
-        Ok(_) => result.files_written.push(colors_path.to_string_lossy().into()),
-        Err(e) => result.errors.push(format!("Failed to write colors.conf: {}", e)),
+        Ok(_) => result
+            .files_written
+            .push(colors_path.to_string_lossy().into()),
+        Err(e) => result
+            .errors
+            .push(format!("Failed to write colors.conf: {}", e)),
     }
 
     // Write waybar style.css from bundled template
     let waybar_css = envsubst(WAYBAR_STYLE_TEMPLATE, &vars);
     let style_path = base_path.join("waybar/style.css");
     match write_file(&style_path, &waybar_css) {
-        Ok(_) => result.files_written.push(style_path.to_string_lossy().into()),
-        Err(e) => result.errors.push(format!("Failed to write waybar style.css: {}", e)),
+        Ok(_) => result
+            .files_written
+            .push(style_path.to_string_lossy().into()),
+        Err(e) => result
+            .errors
+            .push(format!("Failed to write waybar style.css: {}", e)),
     }
 
     // Write GTK settings
@@ -329,7 +441,9 @@ pub fn apply_theme(
         let gtk_path = base_path.join(format!("{}/settings.ini", ver));
         match write_file(&gtk_path, &gtk_settings) {
             Ok(_) => result.files_written.push(gtk_path.to_string_lossy().into()),
-            Err(e) => result.errors.push(format!("Failed to write {}/settings.ini: {}", ver, e)),
+            Err(e) => result
+                .errors
+                .push(format!("Failed to write {}/settings.ini: {}", ver, e)),
         }
     }
 
@@ -366,13 +480,13 @@ fn dirs_or_home(name: &str, base_path: &Path) -> PathBuf {
 fn build_sway_colors_conf(vars: &std::collections::HashMap<String, String>) -> String {
     let get = |k: &str| vars.get(k).map(|s| s.as_str()).unwrap_or("#888888");
 
-    let base      = get("COLOR_BASE");
-    let text      = get("COLOR_TEXT");
-    let lavender  = get("COLOR_LAVENDER");
-    let overlay0  = get("COLOR_OVERLAY0");
-    let subtext0  = get("COLOR_SUBTEXT0");
+    let base = get("COLOR_BASE");
+    let text = get("COLOR_TEXT");
+    let lavender = get("COLOR_LAVENDER");
+    let overlay0 = get("COLOR_OVERLAY0");
+    let subtext0 = get("COLOR_SUBTEXT0");
     let rosewater = get("COLOR_ROSEWATER");
-    let peach     = get("COLOR_PEACH");
+    let peach = get("COLOR_PEACH");
 
     format!(
         "# Sway client colors — generated by sway-configurator\n\
@@ -385,25 +499,34 @@ fn build_sway_colors_conf(vars: &std::collections::HashMap<String, String>) -> S
          gaps inner {gap_inner}\n\
          gaps outer {gap_outer}\n\
          default_border pixel {border_width}\n",
-        lavender  = lavender,
-        base      = base,
-        text      = text,
+        lavender = lavender,
+        base = base,
+        text = text,
         rosewater = rosewater,
-        overlay0  = overlay0,
-        subtext0  = subtext0,
-        peach     = peach,
-        gap_inner  = vars.get("GAP_INNER").map(|s| s.as_str()).unwrap_or("5"),
-        gap_outer  = vars.get("GAP_OUTER").map(|s| s.as_str()).unwrap_or("5"),
+        overlay0 = overlay0,
+        subtext0 = subtext0,
+        peach = peach,
+        gap_inner = vars.get("GAP_INNER").map(|s| s.as_str()).unwrap_or("5"),
+        gap_outer = vars.get("GAP_OUTER").map(|s| s.as_str()).unwrap_or("5"),
         border_width = vars.get("BORDER_WIDTH").map(|s| s.as_str()).unwrap_or("2"),
     )
 }
 
 /// Build GTK settings.ini content from theme variables.
 fn build_gtk_settings(vars: &std::collections::HashMap<String, String>) -> String {
-    let theme  = vars.get("GTK_THEME_NAME").map(|s| s.as_str()).unwrap_or("Adwaita");
-    let icons  = vars.get("ICON_THEME").map(|s| s.as_str()).unwrap_or("Adwaita");
-    let font   = vars.get("FONT_FAMILY").map(|s| s.as_str()).unwrap_or("Sans");
-    let size   = vars.get("FONT_SIZE").map(|s| s.as_str()).unwrap_or("10");
+    let theme = vars
+        .get("GTK_THEME_NAME")
+        .map(|s| s.as_str())
+        .unwrap_or("Adwaita");
+    let icons = vars
+        .get("ICON_THEME")
+        .map(|s| s.as_str())
+        .unwrap_or("Adwaita");
+    let font = vars
+        .get("FONT_FAMILY")
+        .map(|s| s.as_str())
+        .unwrap_or("Sans");
+    let size = vars.get("FONT_SIZE").map(|s| s.as_str()).unwrap_or("10");
 
     format!(
         "[Settings]\n\
@@ -416,7 +539,10 @@ fn build_gtk_settings(vars: &std::collections::HashMap<String, String>) -> Strin
          gtk-xft-hinting=1\n\
          gtk-xft-hintstyle=hintfull\n\
          gtk-xft-rgba=rgb\n",
-        theme = theme, icons = icons, font = font, size = size,
+        theme = theme,
+        icons = icons,
+        font = font,
+        size = size,
     )
 }
 

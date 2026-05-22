@@ -10,9 +10,9 @@ use std::rc::Rc;
 
 #[cfg(feature = "gtk")]
 use crate::config::detect::SwayOutput;
+use crate::model::output::Transform;
 #[cfg(feature = "gtk")]
 use crate::model::output::{OutputConfig, Resolution};
-use crate::model::output::Transform;
 #[cfg(feature = "gtk")]
 use crate::state::AppState;
 
@@ -43,7 +43,10 @@ pub fn transform_index(t: Transform) -> u32 {
 
 /// Transform variant from a ComboRow selection index.
 pub fn transform_from_index(idx: u32) -> Transform {
-    TRANSFORMS.get(idx as usize).copied().unwrap_or(Transform::Normal)
+    TRANSFORMS
+        .get(idx as usize)
+        .copied()
+        .unwrap_or(Transform::Normal)
 }
 
 pub const TRANSFORMS: &[Transform] = &[
@@ -73,29 +76,18 @@ impl OutputsPage {
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
 
-        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
-        header_box.set_margin_start(12);
-        header_box.set_margin_end(12);
-        header_box.set_margin_top(12);
-        header_box.set_margin_bottom(12);
-
-        let title = gtk4::Label::new(Some("Displays"));
-        title.add_css_class("title-1");
-        header_box.append(&title);
-
-        let description = gtk4::Label::new(Some("Configure monitor layout and settings"));
-        description.add_css_class("dim-label");
-        header_box.append(&description);
-
-        widget.append(&header_box);
+        let clamp = libadwaita::Clamp::new();
+        clamp.set_maximum_size(800);
 
         let groups_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
         groups_box.set_margin_start(12);
         groups_box.set_margin_end(12);
+        groups_box.set_margin_top(12);
         groups_box.set_margin_bottom(12);
 
         let scrolled = gtk4::ScrolledWindow::new();
-        scrolled.set_child(Some(&groups_box));
+        clamp.set_child(Some(&groups_box));
+        scrolled.set_child(Some(&clamp));
         scrolled.set_vexpand(true);
         widget.append(&scrolled);
 
@@ -113,7 +105,8 @@ impl OutputsPage {
         if self.app_state.borrow().should_refresh_outputs() {
             let detected = crate::config::detect::detect_outputs();
             *self.detected_outputs.borrow_mut() = detected.clone();
-            let configs: Vec<OutputConfig> = detected.iter()
+            let configs: Vec<OutputConfig> = detected
+                .iter()
                 .map(|o| OutputConfig::from_sway(o))
                 .collect();
             self.app_state.borrow_mut().refresh_outputs(configs);
@@ -191,27 +184,32 @@ impl OutputsPage {
 
         // ── Resolution ComboRow (only when detected modes are available) ──
         let modes_data: Vec<(i32, i32, i32)> = sway_out
-            .map(|o| o.modes.iter().map(|m| (m.width, m.height, m.refresh)).collect())
+            .map(|o| {
+                o.modes
+                    .iter()
+                    .map(|m| (m.width, m.height, m.refresh))
+                    .collect()
+            })
             .unwrap_or_default();
 
         if !modes_data.is_empty() {
             // "Auto" is index 0; detected modes start at index 1.
             let mut mode_strings: Vec<String> = vec!["Auto".to_string()];
-            mode_strings.extend(
-                modes_data.iter().map(|&(w, h, r)| format_mode(w, h, r))
-            );
-            let model = gtk4::StringList::new(
-                &mode_strings.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
-            );
+            mode_strings.extend(modes_data.iter().map(|&(w, h, r)| format_mode(w, h, r)));
+            let model =
+                gtk4::StringList::new(&mode_strings.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
             let res_row = libadwaita::ComboRow::new();
             res_row.set_title("Resolution");
             res_row.set_model(Some(&model));
 
             // Pre-select current resolution (or Auto if none set)
-            let selected_idx = output.resolution.as_ref()
+            let selected_idx = output
+                .resolution
+                .as_ref()
                 .and_then(|res| {
-                    let current = format_mode(res.width, res.height, output.refresh_rate.unwrap_or(0));
+                    let current =
+                        format_mode(res.width, res.height, output.refresh_rate.unwrap_or(0));
                     mode_strings.iter().position(|m| m == &current)
                 })
                 .unwrap_or(0); // default to Auto
@@ -229,7 +227,10 @@ impl OutputsPage {
                             out.resolution = None;
                             out.refresh_rate = None;
                         } else if let Some(&(w, h, r)) = modes_clone.get(sel - 1) {
-                            out.resolution = Some(Resolution { width: w, height: h });
+                            out.resolution = Some(Resolution {
+                                width: w,
+                                height: h,
+                            });
                             out.refresh_rate = Some(r);
                         }
                     }

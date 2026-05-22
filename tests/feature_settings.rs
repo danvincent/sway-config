@@ -1,9 +1,9 @@
+use sway_configurator::model::autostart::{AutostartConfig, AutostartEntry};
 /// Tests for Phase 4 feature-detected workstation settings
 use sway_configurator::model::idle::IdleConfig;
-use sway_configurator::model::waybar::{WaybarConfig, WaybarModule, BarPosition};
-use sway_configurator::model::autostart::{AutostartConfig, AutostartEntry};
-use sway_configurator::model::notifications::{NotificationsConfig, NotifPosition};
+use sway_configurator::model::notifications::{NotifPosition, NotificationsConfig};
 use sway_configurator::model::settings::Settings;
+use sway_configurator::model::waybar::{BarPosition, WaybarConfig, WaybarModule};
 
 // ============================================================================
 // Idle Model Tests
@@ -27,7 +27,8 @@ fn test_idle_config_roundtrip() {
     idle.before_sleep = false;
 
     let toml_str = toml::to_string_pretty(&idle).expect("Failed to serialize idle config");
-    let deserialized: IdleConfig = toml::from_str(&toml_str).expect("Failed to deserialize idle config");
+    let deserialized: IdleConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize idle config");
 
     assert_eq!(deserialized, idle);
     assert_eq!(deserialized.lock_timeout, 600);
@@ -43,7 +44,8 @@ fn test_idle_config_zero_disables() {
     idle.screen_off_timeout = 0;
 
     let toml_str = toml::to_string_pretty(&idle).expect("Failed to serialize idle config");
-    let deserialized: IdleConfig = toml::from_str(&toml_str).expect("Failed to deserialize idle config");
+    let deserialized: IdleConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize idle config");
 
     assert_eq!(deserialized.lock_timeout, 0);
     assert_eq!(deserialized.screen_off_timeout, 0);
@@ -71,7 +73,8 @@ fn test_waybar_config_roundtrip() {
     waybar.tray = false;
 
     let toml_str = toml::to_string_pretty(&waybar).expect("Failed to serialize waybar config");
-    let deserialized: WaybarConfig = toml::from_str(&toml_str).expect("Failed to deserialize waybar config");
+    let deserialized: WaybarConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize waybar config");
 
     assert_eq!(deserialized, waybar);
     assert!(!deserialized.enabled);
@@ -100,11 +103,16 @@ fn test_bar_position_default() {
 #[test]
 fn test_waybar_modules_roundtrip() {
     let mut waybar = WaybarConfig::default();
-    waybar.modules_right.push(WaybarModule::new("battery", true));
-    waybar.modules_right.push(WaybarModule::new("network", false));
+    waybar
+        .modules_right
+        .push(WaybarModule::new("battery", true));
+    waybar
+        .modules_right
+        .push(WaybarModule::new("network", false));
 
     let toml_str = toml::to_string_pretty(&waybar).expect("Failed to serialize waybar config");
-    let deserialized: WaybarConfig = toml::from_str(&toml_str).expect("Failed to deserialize waybar config");
+    let deserialized: WaybarConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize waybar config");
 
     assert_eq!(deserialized.modules_right.len(), 2);
     assert_eq!(deserialized.modules_right[0].name, "battery");
@@ -208,7 +216,8 @@ fn test_autostart_config_roundtrip() {
     });
 
     let toml_str = toml::to_string_pretty(&config).expect("Failed to serialize autostart config");
-    let deserialized: AutostartConfig = toml::from_str(&toml_str).expect("Failed to deserialize autostart config");
+    let deserialized: AutostartConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize autostart config");
 
     assert_eq!(deserialized.entries.len(), 2);
     assert_eq!(deserialized.entries[0].id, "app1");
@@ -238,8 +247,10 @@ fn test_notifications_config_roundtrip() {
     notif.position = NotifPosition::BottomLeft;
     notif.follow_focus = true;
 
-    let toml_str = toml::to_string_pretty(&notif).expect("Failed to serialize notifications config");
-    let deserialized: NotificationsConfig = toml::from_str(&toml_str).expect("Failed to deserialize notifications config");
+    let toml_str =
+        toml::to_string_pretty(&notif).expect("Failed to serialize notifications config");
+    let deserialized: NotificationsConfig =
+        toml::from_str(&toml_str).expect("Failed to deserialize notifications config");
 
     assert_eq!(deserialized, notif);
     assert_eq!(deserialized.timeout_ms, 3000);
@@ -269,7 +280,10 @@ fn test_settings_with_all_new_fields_roundtrip() {
     // Add waybar config
     settings.waybar.enabled = false;
     settings.waybar.height = 40;
-    settings.waybar.modules_right.push(WaybarModule::new("battery", true));
+    settings
+        .waybar
+        .modules_right
+        .push(WaybarModule::new("battery", true));
 
     // Add autostart entries
     settings.autostart.add(AutostartEntry {
@@ -306,8 +320,8 @@ name = "dark"
 source = "system"
 "#;
 
-    let settings: Settings = toml::from_str(old_toml)
-        .expect("Failed to deserialize old TOML format");
+    let settings: Settings =
+        toml::from_str(old_toml).expect("Failed to deserialize old TOML format");
 
     // Should have defaults for new fields
     assert_eq!(settings.idle.lock_timeout, 300);
@@ -384,12 +398,10 @@ fn test_has_notification_daemon_returns_bool() {
 fn test_feature_detection_with_known_binary() {
     // These should return true because 'sh' is virtually always available
     use std::process::Command;
-    
+
     // Check if we can actually use 'which' with 'sh'
-    let output = Command::new("which")
-        .arg("sh")
-        .output();
-    
+    let output = Command::new("which").arg("sh").output();
+
     if output.is_ok() && output.unwrap().status.success() {
         // If 'which sh' works, our implementation should also work
         // This is just a smoke test to ensure no panics occur

@@ -1,33 +1,34 @@
 ---
 # sway-configurator
 
-A standalone GUI editor for Sway configuration — manage a live session safely with fragment-based writes.
+A standalone GUI editor for Sway configuration — manage a live session safely with generated config + live apply.
 
 ## Description
 
-sway-configurator is a Rust + GTK4/libadwaita application that provides a focused GUI for configuring the Sway window manager. It does not overwrite your main `~/.config/sway/config`. Instead it writes managed config fragments and triggers live reloads so you can safely tweak displays, inputs, idle/lock, Waybar, autostart and theme settings.
+sway-configurator is a Rust + GTK4/libadwaita application for configuring Sway and Waybar. It keeps settings in `~/.config/sway-configurator/settings.toml`, applies changes from one global **Apply** action, and updates generated runtime files for Sway/Waybar/theme integration.
 
 ## Features
 
-- **Runtime feature detection** — hides or disables controls when required tools or hardware are not available (e.g. no `swayidle` → idle page hidden, no battery → battery widget hidden)
-- **Fragment-based writes** — never overwrites your main sway config; writes only to managed `conf.d/` fragments
-- **Stale file clearance** — disabling a section writes an empty fragment so nothing lingers on reload
-- **Unsaved changes tracking** with an Apply / Revert bar
+- **Single Apply / Revert flow** across all pages (including Themes)
+- **Unsaved changes tracking** with immediate Apply bar visibility on first edit
+- **Themes + overrides** (wallpaper, font family/size, gaps, border width, waybar opacity)
+- **Built-in + user theme discovery** from `~/.config/sway/themes` and `~/source/SwayConfig/themes`
+- **Waybar integration** with safe reload behavior
 - **Settings persisted** to `$XDG_CONFIG_HOME/sway-configurator/settings.toml`
-- **Profile save/load** — named settings snapshots
-- **Dry-run mode** — preview what would be written before applying
+- **Headless-safe test suite** with `--no-default-features`
 
 ## Settings Pages
 
-The app exposes seven sidebar pages:
+The app exposes eight sidebar pages:
 
-1. **Outputs** — display layout, resolution, position, scale, transform (rotation/flip)
+1. **Displays** — monitor layout, resolution, position, scale, transform (rotation/flip)
 2. **Inputs** — keyboard layout/variant/options/repeat rate, touchpad tap/scroll/DWT/acceleration
 3. **Idle / Lock** — swayidle timeout, screen lock command, screen-off timeout
-4. **Waybar** — enable/disable, position, modules-right (clock, tray, battery, network, audio)
+4. **Waybar** — enable/disable, position, modules configuration
 5. **Autostart** — exec entries with description and enable/disable toggle
 6. **Notifications** — notification daemon settings
-7. **Themes** — select from `~/.config/sway-configurator/themes/`, `~/source/SwayConfig/themes/`, or `/usr/share/themes/`
+7. **Themes** — select palette + optional override rows (checkbox enables override)
+8. **General** — environment defaults (e.g. terminal command + args)
 
 ## Building from Source
 
@@ -88,6 +89,17 @@ Tests run without GTK — no system libraries required for the test suite:
 cargo test --no-default-features
 ```
 
+## Packaging (WIP)
+
+Initial Debian packaging metadata is included via `cargo-deb`.
+
+```bash
+cargo install cargo-deb
+cargo deb
+```
+
+Generated package artifacts are placed in `target/debian/`.
+
 ## Architecture
 
 ```
@@ -108,7 +120,7 @@ src/
 
 ## Managed Config Files
 
-The app writes only to these paths — it never modifies your main `~/.config/sway/config`:
+The app writes these managed paths. Keep your main Sway config including generated fragments:
 
 | File | Purpose |
 |------|---------|
@@ -116,7 +128,11 @@ The app writes only to these paths — it never modifies your main `~/.config/sw
 | `~/.config/sway/conf.d/inputs.conf` | Keyboard & touchpad |
 | `~/.config/sway/conf.d/idle.conf` | Idle/lock config |
 | `~/.config/sway/conf.d/autostart.conf` | Autostart entries |
-| `~/.config/waybar/config.json` | Waybar bar config |
+| `~/.config/waybar/config.jsonc` | Waybar bar config |
+| `~/.config/waybar/style.css` | Waybar style (theme variables) |
+| `~/.config/gtk-3.0/settings.ini` | GTK settings from selected theme |
+| `~/.config/gtk-4.0/settings.ini` | GTK settings from selected theme |
+| `~/.config/sway-theme` | Pointer to active theme `.env` file |
 
 Make sure your main sway config includes `conf.d`:
 ```
