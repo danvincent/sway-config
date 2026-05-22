@@ -128,6 +128,7 @@ fn test_detect_keyboards_filters_correctly() {
         product: 1,
         type_: "keyboard".to_string(),
         xkb_active_layout_name: Some("us".to_string()),
+        xkb_layouts_as_symbols: vec!["us".to_string()],
         libinput: None,
     };
     
@@ -138,6 +139,7 @@ fn test_detect_keyboards_filters_correctly() {
         product: 2,
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
+        xkb_layouts_as_symbols: vec![],
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -166,6 +168,7 @@ fn test_detect_touchpads_filters_correctly() {
         product: 1,
         type_: "keyboard".to_string(),
         xkb_active_layout_name: Some("us".to_string()),
+        xkb_layouts_as_symbols: vec!["us".to_string()],
         libinput: None,
     };
     
@@ -176,6 +179,7 @@ fn test_detect_touchpads_filters_correctly() {
         product: 2,
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
+        xkb_layouts_as_symbols: vec![],
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -204,6 +208,7 @@ fn test_detect_touchpads_by_name() {
         product: 99,
         type_: "other".to_string(),
         xkb_active_layout_name: None,
+        xkb_layouts_as_symbols: vec![],
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -254,10 +259,12 @@ fn test_keyboard_config_from_sway() {
         .expect("Failed to parse fixture");
     
     let config = KeyboardConfig::from_sway(&sway_input);
-    
+
+    // Layout comes from xkb_layouts_as_symbols[0] ("gb"); variant from system /etc/default/keyboard.
+    let (_sys_layout, sys_variant) = sway_configurator::config::detect::system_keyboard_layout();
     assert_eq!(config.identifier, "1:1:AT_Translated_Set_2_keyboard");
-    assert_eq!(config.xkb_layout, "us"); // default
-    assert_eq!(config.xkb_variant, "");
+    assert_eq!(config.xkb_layout, "gb"); // from xkb_layouts_as_symbols[0]
+    assert_eq!(config.xkb_variant, sys_variant);   // from /etc/default/keyboard
     assert_eq!(config.xkb_options, "");
     assert_eq!(config.repeat_delay, 600);
     assert_eq!(config.repeat_rate, 25);
@@ -316,13 +323,18 @@ fn test_keyboard_config_defaults() {
         product: 0,
         type_: "keyboard".to_string(),
         xkb_active_layout_name: None,
+        xkb_layouts_as_symbols: vec![],
         libinput: None,
     };
     
     let config = KeyboardConfig::from_sway(&sway_input);
-    
-    assert_eq!(config.xkb_layout, "us");
-    assert_eq!(config.xkb_variant, "");
+
+    // When xkb_active_layout_name is None, the layout is inherited from
+    // /etc/default/keyboard (XKBLAYOUT) or defaults to "us".
+    let (expected_layout, expected_variant) =
+        sway_configurator::config::detect::system_keyboard_layout();
+    assert_eq!(config.xkb_layout, expected_layout);
+    assert_eq!(config.xkb_variant, expected_variant);
     assert_eq!(config.xkb_options, "");
     assert_eq!(config.repeat_delay, 600);
     assert_eq!(config.repeat_rate, 25);

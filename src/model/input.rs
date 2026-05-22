@@ -60,12 +60,28 @@ fn default_repeat_rate() -> i32 {
 }
 
 impl KeyboardConfig {
-    /// Create KeyboardConfig from a detected Sway input (keyboard type)
+    /// Create KeyboardConfig from a detected Sway input (keyboard type).
+    /// The xkb_layout is populated from:
+    ///   1. `xkb_layouts_as_symbols[0]` from swaymsg — the XKB symbol (e.g. "gb", "us")
+    ///      that corresponds to the active layout; this is what sway config expects.
+    ///   2. `/etc/default/keyboard` (XKBLAYOUT= line) as fallback when swaymsg doesn't
+    ///      provide symbols (e.g. when running outside a Sway session).
+    ///   3. "us" if neither source is available.
     pub fn from_sway(input: &crate::config::detect::SwayInput) -> Self {
+        let (sys_layout, sys_variant) =
+            crate::config::detect::system_keyboard_layout();
+
+        let xkb_layout = input
+            .xkb_layouts_as_symbols
+            .first()
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or(sys_layout);
+
         KeyboardConfig {
             identifier: input.identifier.clone(),
-            xkb_layout: "us".to_string(),
-            xkb_variant: String::new(),
+            xkb_layout,
+            xkb_variant: sys_variant,
             xkb_options: String::new(),
             repeat_delay: 600,
             repeat_rate: 25,

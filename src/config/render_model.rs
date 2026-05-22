@@ -441,5 +441,55 @@ mod tests {
             "no refresh rate → no '@' in directive, got: {directive}"
         );
     }
+
+    #[test]
+    fn test_render_keyboard_layout_symbol_in_directive() {
+        use crate::model::input::KeyboardConfig;
+        let mut settings = Settings::default();
+        settings.keyboards = vec![KeyboardConfig {
+            identifier: "1:1:AT_Translated_Set_2_keyboard".to_string(),
+            xkb_layout: "gb".to_string(),
+            xkb_variant: String::new(),
+            xkb_options: String::new(),
+            repeat_delay: 600,
+            repeat_rate: 25,
+        }];
+        let model = RenderModel::from_settings(&settings);
+        let directive = &model.inputs[0].sway_directive;
+        assert!(
+            directive.contains("xkb_layout gb"),
+            "directive must contain layout symbol 'gb', got: {directive}"
+        );
+        assert!(
+            !directive.contains("English"),
+            "directive must not contain display name, got: {directive}"
+        );
+    }
+
+    #[test]
+    fn test_render_keyboard_different_layouts_produce_different_directives() {
+        use crate::model::input::KeyboardConfig;
+
+        let make = |layout: &str| {
+            let mut settings = Settings::default();
+            settings.keyboards = vec![KeyboardConfig {
+                identifier: "kb".to_string(),
+                xkb_layout: layout.to_string(),
+                xkb_variant: String::new(),
+                xkb_options: String::new(),
+                repeat_delay: 600,
+                repeat_rate: 25,
+            }];
+            RenderModel::from_settings(&settings).inputs[0].sway_directive.clone()
+        };
+
+        let gb = make("gb");
+        let us = make("us");
+        let de = make("de");
+        assert_ne!(gb, us);
+        assert_ne!(gb, de);
+        assert!(gb.contains("xkb_layout gb"), "gb directive: {gb}");
+        assert!(us.contains("xkb_layout us"), "us directive: {us}");
+    }
 }
 

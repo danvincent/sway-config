@@ -1,8 +1,15 @@
 /// Inputs configuration page (keyboard, mouse)
 #[cfg(feature = "gtk")]
 use gtk4::prelude::*;
+#[cfg(feature = "gtk")]
 use std::cell::RefCell;
+#[cfg(feature = "gtk")]
 use std::rc::Rc;
+
+#[cfg(feature = "gtk")]
+use libadwaita::prelude::*;
+
+use crate::model::input::AccelProfile;
 
 #[cfg(feature = "gtk")]
 use crate::model::input::{KeyboardConfig, TouchpadConfig};
@@ -10,12 +17,36 @@ use crate::model::input::{KeyboardConfig, TouchpadConfig};
 #[cfg(feature = "gtk")]
 use crate::state::AppState;
 
+// ─── Pure helpers (no GTK — testable without a display) ───────────────────────
+
+/// Labels for the acceleration-profile ComboRow, in index order.
+pub const ACCEL_PROFILES: [AccelProfile; 2] = [AccelProfile::Adaptive, AccelProfile::Flat];
+
+/// Human-readable label for an AccelProfile value.
+pub fn accel_profile_label(p: AccelProfile) -> &'static str {
+    match p {
+        AccelProfile::Adaptive => "Adaptive",
+        AccelProfile::Flat => "Flat",
+    }
+}
+
+/// Index of an AccelProfile in ACCEL_PROFILES.
+pub fn accel_profile_index(p: AccelProfile) -> u32 {
+    ACCEL_PROFILES.iter().position(|&x| x == p).unwrap_or(0) as u32
+}
+
+/// AccelProfile from a ComboRow selected index.
+pub fn accel_profile_from_index(idx: u32) -> AccelProfile {
+    ACCEL_PROFILES.get(idx as usize).copied().unwrap_or(AccelProfile::Adaptive)
+}
+
+// ─── GTK page ─────────────────────────────────────────────────────────────────
+
 /// Inputs page - for configuring input devices
 #[cfg(feature = "gtk")]
 pub struct InputsPage {
     widget: gtk4::Box,
-    keyboards_list: gtk4::ListBox,
-    touchpads_list: gtk4::ListBox,
+    groups_box: gtk4::Box,
     app_state: Rc<RefCell<AppState>>,
 }
 
@@ -24,62 +55,29 @@ impl InputsPage {
     /// Create a new inputs page
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        
-        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
-        header_box.set_margin_start(12);
-        header_box.set_margin_end(12);
-        header_box.set_margin_top(12);
-        header_box.set_margin_bottom(12);
-        
-        let title = gtk4::Label::new(Some("Input Devices"));
-        title.add_css_class("title-1");
-        header_box.append(&title);
-        
-        let description = gtk4::Label::new(Some("Configure keyboard, mouse, and touchpad settings"));
-        description.add_css_class("dim-label");
-        header_box.append(&description);
-        
-        widget.append(&header_box);
-        
+
         let scrolled = gtk4::ScrolledWindow::new();
         scrolled.set_vexpand(true);
-        
-        let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-        main_box.set_margin_start(12);
-        main_box.set_margin_end(12);
-        main_box.set_margin_top(12);
-        main_box.set_margin_bottom(12);
-        
-        // Keyboards section
-        let keyboards_title = gtk4::Label::new(Some("Keyboards"));
-        keyboards_title.add_css_class("heading");
-        keyboards_title.set_halign(gtk4::Align::Start);
-        main_box.append(&keyboards_title);
-        
-        let keyboards_list = gtk4::ListBox::new();
-        keyboards_list.set_selection_mode(gtk4::SelectionMode::None);
-        main_box.append(&keyboards_list);
-        
-        // Touchpads section
-        let touchpads_title = gtk4::Label::new(Some("Touchpads"));
-        touchpads_title.add_css_class("heading");
-        touchpads_title.set_halign(gtk4::Align::Start);
-        main_box.append(&touchpads_title);
-        
-        let touchpads_list = gtk4::ListBox::new();
-        touchpads_list.set_selection_mode(gtk4::SelectionMode::None);
-        main_box.append(&touchpads_list);
-        
-        scrolled.set_child(Some(&main_box));
+
+        let clamp = libadwaita::Clamp::new();
+        clamp.set_maximum_size(800);
+        clamp.set_tightening_threshold(600);
+
+        let groups_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
+        groups_box.set_margin_start(12);
+        groups_box.set_margin_end(12);
+        groups_box.set_margin_top(24);
+        groups_box.set_margin_bottom(24);
+
+        clamp.set_child(Some(&groups_box));
+        scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
-        
-        InputsPage { widget, keyboards_list, touchpads_list, app_state }
+
+        InputsPage { widget, groups_box, app_state }
     }
 
-    /// Detect inputs and load them
+    /// Detect and load inputs into the page
     pub fn on_navigate(&self) {
-        // Keyboards and touchpads are detected independently so that unsaved edits
-        // in one subsection do not prevent detection from refreshing the other.
         let need_keyboards = self.app_state.borrow().should_refresh_keyboards();
         let need_touchpads = self.app_state.borrow().should_refresh_touchpads();
 
@@ -104,72 +102,213 @@ impl InputsPage {
                 self.app_state.borrow_mut().refresh_touchpads(touchpads);
             }
         }
-        
-        // Load into UI from whatever is in AppState (user edits or detected)
-        self.load_keyboards(&self.app_state.borrow().settings().keyboards);
-        self.load_touchpads(&self.app_state.borrow().settings().touchpads);
+
+        let keyboards = self.app_state.borrow().settings().keyboards.clone();
+        let touchpads = self.app_state.borrow().settings().touchpads.clone();
+        self.load_inputs(&keyboards, &touchpads);
     }
 
-    /// Load keyboards into the list
-    pub fn load_keyboards(&self, keyboards: &[KeyboardConfig]) {
-        // Clear existing items
-        while let Some(child) = self.keyboards_list.first_child() {
-            self.keyboards_list.remove(&child);
+    /// Rebuild all groups from current settings
+    pub fn load_inputs(&self, keyboards: &[KeyboardConfig], touchpads: &[TouchpadConfig]) {
+        while let Some(child) = self.groups_box.first_child() {
+            self.groups_box.remove(&child);
         }
-        
-        // Add new items
-        for keyboard in keyboards {
-            let row = gtk4::ListBoxRow::new();
-            let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-            box_widget.set_margin_start(12);
-            box_widget.set_margin_end(12);
-            box_widget.set_margin_top(6);
-            box_widget.set_margin_bottom(6);
-            
-            let name_label = gtk4::Label::new(Some(&keyboard.identifier));
-            name_label.set_halign(gtk4::Align::Start);
-            name_label.add_css_class("heading");
-            box_widget.append(&name_label);
-            
-            let layout_label = gtk4::Label::new(Some(&format!("Layout: {}", keyboard.xkb_layout)));
-            layout_label.set_halign(gtk4::Align::Start);
-            layout_label.add_css_class("dim-label");
-            box_widget.append(&layout_label);
-            
-            row.set_child(Some(&box_widget));
-            self.keyboards_list.append(&row);
+
+        if keyboards.is_empty() && touchpads.is_empty() {
+            let label = gtk4::Label::new(Some("No input devices detected.\nConnect a keyboard or touchpad and navigate away then back."));
+            label.set_halign(gtk4::Align::Center);
+            label.add_css_class("dim-label");
+            label.set_wrap(true);
+            label.set_justify(gtk4::Justification::Center);
+            label.set_margin_top(48);
+            self.groups_box.append(&label);
+            return;
+        }
+
+        for (idx, kb) in keyboards.iter().enumerate() {
+            let group = self.build_keyboard_group(kb, idx);
+            self.groups_box.append(&group);
+        }
+
+        for (idx, tp) in touchpads.iter().enumerate() {
+            let group = self.build_touchpad_group(tp, idx);
+            self.groups_box.append(&group);
         }
     }
 
-    /// Load touchpads into the list
-    pub fn load_touchpads(&self, touchpads: &[TouchpadConfig]) {
-        // Clear existing items
-        while let Some(child) = self.touchpads_list.first_child() {
-            self.touchpads_list.remove(&child);
+    fn build_keyboard_group(&self, kb: &KeyboardConfig, idx: usize) -> libadwaita::PreferencesGroup {
+        let group = libadwaita::PreferencesGroup::new();
+        group.set_title("Keyboard");
+
+        let expander = libadwaita::ExpanderRow::new();
+        expander.set_title(&kb.identifier);
+        expander.set_subtitle("Keyboard device");
+        expander.set_expanded(true);
+
+        // ── Layout ──
+        let layout_row = libadwaita::EntryRow::new();
+        layout_row.set_title("XKB Layout");
+        layout_row.set_text(&kb.xkb_layout);
+        {
+            let state = Rc::clone(&self.app_state);
+            layout_row.connect_changed(move |entry| {
+                let text = entry.text().to_string();
+                if let Some(kb) = state.borrow_mut().settings_mut().keyboards.get_mut(idx) {
+                    kb.xkb_layout = text;
+                }
+                state.borrow_mut().mark_keyboards_dirty();
+            });
         }
-        
-        // Add new items
-        for touchpad in touchpads {
-            let row = gtk4::ListBoxRow::new();
-            let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-            box_widget.set_margin_start(12);
-            box_widget.set_margin_end(12);
-            box_widget.set_margin_top(6);
-            box_widget.set_margin_bottom(6);
-            
-            let name_label = gtk4::Label::new(Some(&touchpad.identifier));
-            name_label.set_halign(gtk4::Align::Start);
-            name_label.add_css_class("heading");
-            box_widget.append(&name_label);
-            
-            let tap_label = gtk4::Label::new(Some(if touchpad.tap_to_click { "Tap enabled" } else { "Tap disabled" }));
-            tap_label.set_halign(gtk4::Align::Start);
-            tap_label.add_css_class("dim-label");
-            box_widget.append(&tap_label);
-            
-            row.set_child(Some(&box_widget));
-            self.touchpads_list.append(&row);
+        expander.add_row(&layout_row);
+
+        // ── Variant ──
+        let variant_row = libadwaita::EntryRow::new();
+        variant_row.set_title("XKB Variant");
+        variant_row.set_text(&kb.xkb_variant);
+        {
+            let state = Rc::clone(&self.app_state);
+            variant_row.connect_changed(move |entry| {
+                let text = entry.text().to_string();
+                if let Some(kb) = state.borrow_mut().settings_mut().keyboards.get_mut(idx) {
+                    kb.xkb_variant = text;
+                }
+                state.borrow_mut().mark_keyboards_dirty();
+            });
         }
+        expander.add_row(&variant_row);
+
+        // ── Options ──
+        let options_row = libadwaita::EntryRow::new();
+        options_row.set_title("XKB Options");
+        options_row.set_text(&kb.xkb_options);
+        {
+            let state = Rc::clone(&self.app_state);
+            options_row.connect_changed(move |entry| {
+                let text = entry.text().to_string();
+                if let Some(kb) = state.borrow_mut().settings_mut().keyboards.get_mut(idx) {
+                    kb.xkb_options = text;
+                }
+                state.borrow_mut().mark_keyboards_dirty();
+            });
+        }
+        expander.add_row(&options_row);
+
+        // ── Repeat delay ──
+        let delay_row = libadwaita::SpinRow::with_range(100.0, 2000.0, 50.0);
+        delay_row.set_title("Repeat Delay (ms)");
+        delay_row.set_value(kb.repeat_delay as f64);
+        {
+            let state = Rc::clone(&self.app_state);
+            delay_row.connect_value_notify(move |row| {
+                let val = row.value() as i32;
+                if let Some(kb) = state.borrow_mut().settings_mut().keyboards.get_mut(idx) {
+                    kb.repeat_delay = val;
+                }
+                state.borrow_mut().mark_keyboards_dirty();
+            });
+        }
+        expander.add_row(&delay_row);
+
+        // ── Repeat rate ──
+        let rate_row = libadwaita::SpinRow::with_range(1.0, 100.0, 1.0);
+        rate_row.set_title("Repeat Rate (keys/s)");
+        rate_row.set_value(kb.repeat_rate as f64);
+        {
+            let state = Rc::clone(&self.app_state);
+            rate_row.connect_value_notify(move |row| {
+                let val = row.value() as i32;
+                if let Some(kb) = state.borrow_mut().settings_mut().keyboards.get_mut(idx) {
+                    kb.repeat_rate = val;
+                }
+                state.borrow_mut().mark_keyboards_dirty();
+            });
+        }
+        expander.add_row(&rate_row);
+
+        group.add(&expander);
+        group
+    }
+
+    fn build_touchpad_group(&self, tp: &TouchpadConfig, idx: usize) -> libadwaita::PreferencesGroup {
+        let group = libadwaita::PreferencesGroup::new();
+        group.set_title("Touchpad");
+
+        let expander = libadwaita::ExpanderRow::new();
+        expander.set_title(&tp.identifier);
+        expander.set_subtitle("Touchpad device");
+        expander.set_expanded(true);
+
+        macro_rules! add_switch {
+            ($title:expr, $val:expr, $field:ident) => {{
+                let row = libadwaita::SwitchRow::new();
+                row.set_title($title);
+                row.set_active($val);
+                let state = Rc::clone(&self.app_state);
+                row.connect_active_notify(move |r| {
+                    let v = r.is_active();
+                    if let Some(tp) = state.borrow_mut().settings_mut().touchpads.get_mut(idx) {
+                        tp.$field = v;
+                    }
+                    state.borrow_mut().mark_touchpads_dirty();
+                });
+                row
+            }};
+        }
+
+        let tap_row = add_switch!("Tap to Click", tp.tap_to_click, tap_to_click);
+        expander.add_row(&tap_row);
+
+        let scroll_row = add_switch!("Natural Scroll", tp.natural_scroll, natural_scroll);
+        expander.add_row(&scroll_row);
+
+        let dwt_row = add_switch!("Disable While Typing", tp.dwt, dwt);
+        expander.add_row(&dwt_row);
+
+        let left_row = add_switch!("Left-Handed Mode", tp.left_handed, left_handed);
+        expander.add_row(&left_row);
+
+        let middle_row = add_switch!("Middle Button Emulation", tp.middle_emulation, middle_emulation);
+        expander.add_row(&middle_row);
+
+        // ── Accel speed ──
+        let accel_speed_row = libadwaita::SpinRow::with_range(-1.0, 1.0, 0.1);
+        accel_speed_row.set_title("Acceleration Speed");
+        accel_speed_row.set_digits(1);
+        accel_speed_row.set_value(tp.accel_speed);
+        {
+            let state = Rc::clone(&self.app_state);
+            accel_speed_row.connect_value_notify(move |row| {
+                let val = row.value();
+                if let Some(tp) = state.borrow_mut().settings_mut().touchpads.get_mut(idx) {
+                    tp.accel_speed = val;
+                }
+                state.borrow_mut().mark_touchpads_dirty();
+            });
+        }
+        expander.add_row(&accel_speed_row);
+
+        // ── Accel profile ──
+        let profile_strings: gtk4::StringList = gtk4::StringList::new(
+            &ACCEL_PROFILES.map(accel_profile_label),
+        );
+        let profile_row = libadwaita::ComboRow::new();
+        profile_row.set_title("Acceleration Profile");
+        profile_row.set_model(Some(&profile_strings));
+        profile_row.set_selected(accel_profile_index(tp.accel_profile));
+        {
+            let state = Rc::clone(&self.app_state);
+            profile_row.connect_selected_notify(move |row| {
+                let profile = accel_profile_from_index(row.selected());
+                if let Some(tp) = state.borrow_mut().settings_mut().touchpads.get_mut(idx) {
+                    tp.accel_profile = profile;
+                }
+                state.borrow_mut().mark_touchpads_dirty();
+            });
+        }
+        expander.add_row(&profile_row);
+
+        group.add(&expander);
+        group
     }
 
     /// Get a reference to the page's widget
@@ -188,3 +327,4 @@ impl Default for InputsPage {
 
 #[cfg(not(feature = "gtk"))]
 pub struct InputsPage;
+

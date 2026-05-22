@@ -46,7 +46,13 @@ pub struct SwayInput {
     pub product: i32,
     #[serde(rename = "type")]
     pub type_: String,
+    /// Human-readable active layout name, e.g. "English (UK)". Use xkb_layouts_as_symbols
+    /// for the actual XKB symbol string that should appear in sway config.
     pub xkb_active_layout_name: Option<String>,
+    /// XKB layout symbols for each configured layout, e.g. ["gb", "us"].
+    /// The first symbol corresponds to the current active layout.
+    #[serde(default)]
+    pub xkb_layouts_as_symbols: Vec<String>,
     pub libinput: Option<LibinputConfig>,
 }
 
@@ -93,6 +99,37 @@ pub fn detect_touchpads(inputs: &[SwayInput]) -> Vec<&SwayInput> {
                 || input.name.to_lowercase().contains("touchpad")
         })
         .collect()
+}
+
+/// Read the system keyboard layout from /etc/default/keyboard.
+/// Returns `(layout, variant)` — layout defaults to "us", variant to "".
+/// Used as the fallback when a keyboard device's `xkb_layouts_as_symbols` list is
+/// empty (e.g. when running outside a Sway session or on hardware that doesn't
+/// report XKB symbol info via swaymsg).
+pub fn system_keyboard_layout() -> (String, String) {
+    system_keyboard_layout_from_path("/etc/default/keyboard")
+}
+
+/// Inner implementation parameterised on path for testability.
+pub fn system_keyboard_layout_from_path(path: &str) -> (String, String) {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return ("us".to_string(), String::new()),
+    };
+
+    let mut layout = "us".to_string();
+    let mut variant = String::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(val) = line.strip_prefix("XKBLAYOUT=") {
+            layout = val.trim_matches('"').to_string();
+        } else if let Some(val) = line.strip_prefix("XKBVARIANT=") {
+            variant = val.trim_matches('"').to_string();
+        }
+    }
+
+    (layout, variant)
 }
 
 #[cfg(test)]

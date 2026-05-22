@@ -89,6 +89,20 @@ impl AppState {
         self.outputs_dirty = true;
     }
 
+    /// Mark keyboards as dirty from an individual-field update.
+    /// Use this when updating a single keyboard field via settings_mut() instead of set_keyboards().
+    pub fn mark_keyboards_dirty(&mut self) {
+        self.dirty = true;
+        self.keyboards_dirty = true;
+    }
+
+    /// Mark touchpads as dirty from an individual-field update.
+    /// Use this when updating a single touchpad field via settings_mut() instead of set_touchpads().
+    pub fn mark_touchpads_dirty(&mut self) {
+        self.dirty = true;
+        self.touchpads_dirty = true;
+    }
+
     /// Get a reference to the current settings
     pub fn settings(&self) -> &Settings {
         &self.settings

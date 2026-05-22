@@ -375,3 +375,153 @@ fn test_outputs_config_position_update() {
     assert_eq!(state.settings().outputs[0].position.x, 1920);
     assert!(state.is_outputs_dirty());
 }
+
+// ============ Phase 4: Inputs page helper tests ============
+
+#[test]
+fn test_accel_profile_labels_distinct() {
+    use sway_configurator::ui::pages::inputs::{ACCEL_PROFILES, accel_profile_label};
+    let labels: Vec<&str> = ACCEL_PROFILES.iter().map(|&p| accel_profile_label(p)).collect();
+    let mut unique = labels.clone();
+    unique.dedup();
+    assert_eq!(labels.len(), unique.len(), "all accel profile labels must be distinct");
+}
+
+#[test]
+fn test_accel_profile_index_roundtrip() {
+    use sway_configurator::ui::pages::inputs::{ACCEL_PROFILES, accel_profile_index, accel_profile_from_index};
+    for &p in &ACCEL_PROFILES {
+        let idx = accel_profile_index(p);
+        assert_eq!(accel_profile_from_index(idx), p, "roundtrip failed for {:?}", p);
+    }
+}
+
+#[test]
+fn test_keyboard_layout_fallback_from_etc_default_keyboard() {
+    use sway_configurator::config::detect::system_keyboard_layout_from_path;
+    use std::io::Write;
+
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    writeln!(tmp, "XKBLAYOUT=\"gb\"").unwrap();
+    writeln!(tmp, "XKBVARIANT=\"\"").unwrap();
+
+    let (layout, variant) = system_keyboard_layout_from_path(tmp.path().to_str().unwrap());
+    assert_eq!(layout, "gb");
+    assert_eq!(variant, "");
+}
+
+#[test]
+fn test_keyboard_layout_fallback_missing_file() {
+    use sway_configurator::config::detect::system_keyboard_layout_from_path;
+    let (layout, _variant) = system_keyboard_layout_from_path("/nonexistent/path/keyboard");
+    assert_eq!(layout, "us", "missing file should default to 'us'");
+}
+
+#[test]
+fn test_keyboard_xkb_override_updates_appstate() {
+    use sway_configurator::model::input::KeyboardConfig;
+    let mut state = AppState::new(Settings::default());
+    state.refresh_keyboards(vec![KeyboardConfig {
+        identifier: "1:1:kb".to_string(),
+        xkb_layout: "us".to_string(),
+        xkb_variant: String::new(),
+        xkb_options: String::new(),
+        repeat_delay: 600,
+        repeat_rate: 25,
+    }]);
+    assert!(!state.is_keyboards_dirty());
+
+    if let Some(kb) = state.settings_mut().keyboards.get_mut(0) {
+        kb.xkb_layout = "gb".to_string();
+    }
+    state.mark_keyboards_dirty();
+
+    assert_eq!(state.settings().keyboards[0].xkb_layout, "gb");
+    assert!(state.is_dirty());
+    assert!(state.is_keyboards_dirty());
+    // Detection should be suppressed while dirty
+    assert!(!state.should_refresh_keyboards());
+}
+
+#[test]
+fn test_touchpad_tap_toggle_updates_appstate() {
+    use sway_configurator::model::input::{AccelProfile, TouchpadConfig};
+    let mut state = AppState::new(Settings::default());
+    state.refresh_touchpads(vec![TouchpadConfig {
+        identifier: "2:7:touchpad".to_string(),
+        tap_to_click: false,
+        natural_scroll: false,
+        dwt: false,
+        accel_speed: 0.0,
+        accel_profile: AccelProfile::Adaptive,
+        left_handed: false,
+        middle_emulation: false,
+    }]);
+    assert!(!state.is_touchpads_dirty());
+
+    if let Some(tp) = state.settings_mut().touchpads.get_mut(0) {
+        tp.tap_to_click = true;
+    }
+    state.mark_touchpads_dirty();
+
+    assert!(state.settings().touchpads[0].tap_to_click);
+    assert!(state.is_dirty());
+    assert!(state.is_touchpads_dirty());
+    assert!(!state.should_refresh_touchpads());
+}
+
+#[test]
+fn test_touchpad_accel_change_updates_appstate() {
+    use sway_configurator::model::input::{AccelProfile, TouchpadConfig};
+    let mut state = AppState::new(Settings::default());
+    state.refresh_touchpads(vec![TouchpadConfig {
+        identifier: "2:7:touchpad".to_string(),
+        tap_to_click: false,
+        natural_scroll: false,
+        dwt: false,
+        accel_speed: 0.0,
+        accel_profile: AccelProfile::Adaptive,
+        left_handed: false,
+        middle_emulation: false,
+    }]);
+
+    if let Some(tp) = state.settings_mut().touchpads.get_mut(0) {
+        tp.accel_speed = 0.5;
+        tp.accel_profile = AccelProfile::Flat;
+    }
+    state.mark_touchpads_dirty();
+
+    assert!((state.settings().touchpads[0].accel_speed - 0.5).abs() < 1e-9);
+    assert_eq!(state.settings().touchpads[0].accel_profile, AccelProfile::Flat);
+}
+
+#[test]
+fn test_inputs_read_back_matches_loaded() {
+    use sway_configurator::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
+    let mut state = AppState::new(Settings::default());
+
+    let kb = KeyboardConfig {
+        identifier: "kb1".to_string(),
+        xkb_layout: "de".to_string(),
+        xkb_variant: "nodeadkeys".to_string(),
+        xkb_options: "caps:escape".to_string(),
+        repeat_delay: 400,
+        repeat_rate: 30,
+    };
+    let tp = TouchpadConfig {
+        identifier: "tp1".to_string(),
+        tap_to_click: true,
+        natural_scroll: true,
+        dwt: true,
+        accel_speed: -0.2,
+        accel_profile: AccelProfile::Flat,
+        left_handed: false,
+        middle_emulation: true,
+    };
+
+    state.set_keyboards(vec![kb.clone()]);
+    state.set_touchpads(vec![tp.clone()]);
+
+    assert_eq!(state.settings().keyboards[0], kb);
+    assert_eq!(state.settings().touchpads[0], tp);
+}
