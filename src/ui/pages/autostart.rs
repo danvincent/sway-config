@@ -54,6 +54,7 @@ use crate::state::AppState;
 pub struct AutostartPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
+    #[allow(dead_code)]
     add_button: gtk4::Button,
     app_state: Rc<RefCell<AppState>>,
 }
