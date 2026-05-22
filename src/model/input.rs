@@ -61,19 +61,35 @@ fn default_repeat_rate() -> i32 {
 
 impl KeyboardConfig {
     /// Create KeyboardConfig from a detected Sway input (keyboard type).
-    /// XKB settings are read from the main sway config (`~/.config/sway/config`)
-    /// so that the app inherits what's already working, including xkb_options.
-    /// Falls back to `/etc/default/keyboard` for the layout symbol only.
+    /// Layout precedence is:
+    /// 1. Active live Sway symbol (`xkb_layouts_as_symbols[0]`)
+    /// 2. Main sway config defaults (`~/.config/sway/config`)
+    /// 3. System defaults (`/etc/default/keyboard`)
+    ///
+    /// Variant/options are read from sway config defaults so the app preserves
+    /// user-configured XKB settings already working in the current session.
     pub fn from_sway(input: &crate::config::detect::SwayInput) -> Self {
         let (cfg_layout, cfg_variant, cfg_options) =
             crate::config::detect::sway_config_keyboard_defaults();
 
-        let xkb_layout = if !cfg_layout.is_empty() {
-            cfg_layout
-        } else {
-            let (sys_layout, _) = crate::config::detect::system_keyboard_layout();
-            sys_layout
-        };
+        // Prefer the active Sway-reported symbol from live input JSON.
+        // Fall back to sway config defaults, then system keyboard defaults.
+        let xkb_layout = input
+            .xkb_layouts_as_symbols
+            .first()
+            .cloned()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                if !cfg_layout.is_empty() {
+                    Some(cfg_layout.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                let (sys_layout, _) = crate::config::detect::system_keyboard_layout();
+                sys_layout
+            });
 
         // Read repeat settings from live sway input if available
         let repeat_delay = input.repeat_delay.unwrap_or(600);
