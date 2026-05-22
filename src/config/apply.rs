@@ -326,7 +326,7 @@ fn find_theme_path_by_name(name: &str) -> Option<String> {
         .find(|p| std::path::Path::new(p).exists())
 }
 
-/// Apply a theme — writes sway colors, waybar style.css, GTK settings, wallpaper.
+/// Apply a theme — writes sway colors, waybar style.css, GTK/Qt settings, wallpaper.
 ///
 /// The theme `.env` file is parsed; overrides from `ThemeOverrides` are applied.
 /// Set `dry_run` to true to skip all writes and reloads.
@@ -395,7 +395,7 @@ pub fn apply_theme(
     if dry_run {
         result
             .files_written
-            .push("(dry-run) sway colors, waybar style, gtk settings".into());
+            .push("(dry-run) sway colors, waybar style, gtk/qt settings".into());
         return result;
     }
 
@@ -444,6 +444,31 @@ pub fn apply_theme(
             Err(e) => result
                 .errors
                 .push(format!("Failed to write {}/settings.ini: {}", ver, e)),
+        }
+    }
+
+    // Write qt5ct/qt6ct settings so Qt apps can follow icon/font theme.
+    let qt_settings = build_qtct_settings(&vars);
+    for dir in &["qt5ct", "qt6ct"] {
+        let qt_path = base_path.join(format!("{}/{}.conf", dir, dir));
+        match write_file(&qt_path, &qt_settings) {
+            Ok(_) => result.files_written.push(qt_path.to_string_lossy().into()),
+            Err(e) => result
+                .errors
+                .push(format!("Failed to write {}/{}.conf: {}", dir, dir, e)),
+        }
+    }
+
+    // Export platform theme for login sessions when qt5ct/qt6ct is installed.
+    if let Some(platform_theme) = detect_qt_platform_theme() {
+        let envd_path = base_path.join("environment.d/90-sway-config-qt.conf");
+        let envd_content = format!("QT_QPA_PLATFORMTHEME={}\n", platform_theme);
+        match write_file(&envd_path, &envd_content) {
+            Ok(_) => result.files_written.push(envd_path.to_string_lossy().into()),
+            Err(e) => result.errors.push(format!(
+                "Failed to write environment.d QT platform theme config: {}",
+                e
+            )),
         }
     }
 
@@ -546,6 +571,52 @@ fn build_gtk_settings(vars: &std::collections::HashMap<String, String>) -> Strin
     )
 }
 
+/// Build qt5ct/qt6ct config from theme variables.
+fn build_qtct_settings(vars: &std::collections::HashMap<String, String>) -> String {
+    let icons = vars
+        .get("ICON_THEME")
+        .map(|s| s.as_str())
+        .unwrap_or("Adwaita");
+    let font = vars
+        .get("FONT_FAMILY")
+        .map(|s| s.as_str())
+        .unwrap_or("Sans");
+    let size = vars.get("FONT_SIZE").map(|s| s.as_str()).unwrap_or("10");
+    let qt_font = format!("{font},{size},-1,5,50,0,0,0,0,0");
+
+    format!(
+        "[Appearance]\n\
+         icon_theme={icons}\n\
+         standard_dialogs=default\n\
+         style=Fusion\n\
+         \n\
+         [Fonts]\n\
+         general={qt_font}\n\
+         fixed=\"monospace,{size},-1,5,50,0,0,0,0,0\"\n",
+        icons = icons,
+        qt_font = qt_font,
+        size = size,
+    )
+}
+
+fn command_exists(bin: &str) -> bool {
+    std::process::Command::new("which")
+        .arg(bin)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn detect_qt_platform_theme() -> Option<&'static str> {
+    if command_exists("qt5ct") {
+        Some("qt5ct")
+    } else if command_exists("qt6ct") {
+        Some("qt6ct")
+    } else {
+        None
+    }
+}
+
 /// Embedded waybar style.css template (tokens in ${VAR} form).
 const WAYBAR_STYLE_TEMPLATE: &str = include_str!("../assets/waybar_style.css.tmpl");
 
@@ -572,5 +643,17 @@ mod tests {
         };
 
         assert!(result.success);
+    }
+
+    #[test]
+    fn test_build_qtct_settings_uses_theme_vars() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("ICON_THEME".to_string(), "Papirus".to_string());
+        vars.insert("FONT_FAMILY".to_string(), "Inter".to_string());
+        vars.insert("FONT_SIZE".to_string(), "11".to_string());
+
+        let conf = build_qtct_settings(&vars);
+        assert!(conf.contains("icon_theme=Papirus"));
+        assert!(conf.contains("general=Inter,11,-1,5,50,0,0,0,0,0"));
     }
 }
