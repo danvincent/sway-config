@@ -81,11 +81,31 @@ pub fn detect_inputs() -> Vec<SwayInput> {
     swaymsg::get_inputs().unwrap_or_default()
 }
 
-/// Filter inputs to find keyboards
+/// Filter inputs to find keyboards, excluding virtual/auxiliary devices.
+///
+/// Sway reports many non-physical devices as "keyboard" type:
+/// - HDMI CEC virtual keyboards (vc4-hdmi-*)
+/// - Power buttons (pwr_button)
+/// - HID sub-devices (*_Consumer_Control, *_System_Control)
 pub fn detect_keyboards(inputs: &[SwayInput]) -> Vec<&SwayInput> {
     inputs
         .iter()
-        .filter(|input| input.type_ == "keyboard")
+        .filter(|input| {
+            if input.type_ != "keyboard" {
+                return false;
+            }
+            let id = &input.identifier;
+            let name = input.name.to_lowercase();
+            // Exclude HDMI virtual keyboards and power buttons
+            if id.starts_with("0:0:vc4-hdmi") || name == "pwr_button" || id == "0:0:pwr_button" {
+                return false;
+            }
+            // Exclude HID sub-devices (Consumer Control, System Control)
+            if id.ends_with("_Consumer_Control") || id.ends_with("_System_Control") {
+                return false;
+            }
+            true
+        })
         .collect()
 }
 
