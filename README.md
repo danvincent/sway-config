@@ -135,9 +135,9 @@ The app writes these managed paths. Keep your main Sway config including generat
 | `~/.config/waybar/style.css` | Waybar style (theme variables) |
 | `~/.config/gtk-3.0/settings.ini` | GTK settings from selected theme |
 | `~/.config/gtk-4.0/settings.ini` | GTK settings from selected theme |
-| `~/.config/qt5ct/qt5ct.conf` | Qt5 theme/icon/font settings |
-| `~/.config/qt6ct/qt6ct.conf` | Qt6 theme/icon/font settings |
-| `~/.config/environment.d/90-sway-config-qt.conf` | Exports `QT_QPA_PLATFORMTHEME` when qt5ct/qt6ct is installed |
+| `~/.config/qt5ct/qt5ct.conf` | Qt5 theme/icon/palette settings |
+| `~/.config/qt6ct/qt6ct.conf` | Qt6 theme/icon/palette settings |
+| `~/.config/environment.d/90-sway-config-qt.conf` | Exports `QT_QPA_PLATFORMTHEME` and `QT_STYLE_OVERRIDE=Fusion` when qt5ct/qt6ct is installed |
 | `~/.config/sway-theme` | Pointer to active theme `.env` file |
 
 Make sure your main sway config includes `conf.d`:

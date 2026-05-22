@@ -447,7 +447,7 @@ pub fn apply_theme(
         }
     }
 
-    // Write qt5ct/qt6ct settings so Qt apps can follow icon/font and colors.
+    // Write qt5ct/qt6ct settings so Qt apps can follow icon theme and colors.
     let qt_colors = build_qtct_color_scheme(&vars);
     for dir in &["qt5ct", "qt6ct"] {
         let colors_path = base_path.join(format!("{}/colors/sway-config.conf", dir));
@@ -475,18 +475,23 @@ pub fn apply_theme(
     if let Some(platform_theme) = detect_qt_platform_theme() {
         let envd_path = base_path.join("environment.d/90-sway-config-qt.conf");
         let envd_content = build_qt_envd_content(platform_theme);
+        let mut envd_written = false;
         match write_file(&envd_path, &envd_content) {
-            Ok(_) => result
-                .files_written
-                .push(envd_path.to_string_lossy().into()),
+            Ok(_) => {
+                result
+                    .files_written
+                    .push(envd_path.to_string_lossy().into());
+                envd_written = true;
+            }
             Err(e) => result.errors.push(format!(
                 "Failed to write environment.d QT platform theme config: {}",
                 e
             )),
+        };
+        if envd_written {
+            // Make Qt env vars effective for new app launches in the current session.
+            import_qt_env_to_session(platform_theme);
         }
-
-        // Make Qt env vars effective for new app launches in the current session.
-        import_qt_env_to_session(platform_theme);
     }
 
     // Set wallpaper via swaymsg
@@ -706,18 +711,14 @@ fn qt_hex_alpha(color: &str, alpha: u8) -> String {
 }
 
 fn command_exists(bin: &str) -> bool {
-    std::process::Command::new("which")
-        .arg(bin)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    which::which(bin).is_ok()
 }
 
 fn detect_qt_platform_theme() -> Option<&'static str> {
-    if command_exists("qt5ct") {
-        Some("qt5ct")
-    } else if command_exists("qt6ct") {
+    if command_exists("qt6ct") {
         Some("qt6ct")
+    } else if command_exists("qt5ct") {
+        Some("qt5ct")
     } else {
         None
     }
