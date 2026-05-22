@@ -93,9 +93,17 @@ impl WaybarPage {
         
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
-        
-        let prefs_page = libadwaita::PreferencesPage::new();
-        
+
+        // All groups sit directly in outer_box under the clamp.
+        // Using a flat gtk4::Box (no nested PreferencesPage) avoids the
+        // inner-scroll vs outer-scroll layout conflict that squashes groups
+        // when expander rows grow.
+        let outer_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        outer_box.set_margin_start(12);
+        outer_box.set_margin_end(12);
+        outer_box.set_margin_top(12);
+        outer_box.set_margin_bottom(12);
+
         // ── General group ─────────────────────────────────────────────────────
         let preferences_group = libadwaita::PreferencesGroup::new();
         preferences_group.set_title("Waybar Configuration");
@@ -119,8 +127,8 @@ impl WaybarPage {
         height_spin.set_title("Height");
         height_spin.set_subtitle("Height of the bar in pixels");
         preferences_group.add(&height_spin);
-        
-        prefs_page.add(&preferences_group);
+
+        outer_box.append(&preferences_group);
 
         // ── Banner group — created once, shown/hidden via set_visible() ────────
         let banner_group = libadwaita::PreferencesGroup::new();
@@ -130,14 +138,10 @@ impl WaybarPage {
         banner_group.add(&no_waybar_banner);
         no_waybar_banner.set_visible(false);
         banner_group.set_visible(false);
-        prefs_page.add(&banner_group);
+        outer_box.append(&banner_group);
 
         // ── Module selection — gtk4::Box so its PreferencesGroup children can be safely removed ──
-        // modules_box sits alongside prefs_page inside an outer_box under the clamp.
-        let modules_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-
-        let outer_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        outer_box.append(&prefs_page);
+        let modules_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
         outer_box.append(&modules_box);
 
         clamp.set_child(Some(&outer_box));
