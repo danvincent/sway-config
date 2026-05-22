@@ -36,7 +36,8 @@ The app exposes eight sidebar pages:
 
 ### System Dependencies
 
-This app builds against GTK4 and libadwaita, which pull in a chain of system libraries that must be present via `pkg-config`. Install them all at once:
+This app builds against GTK4 and libadwaita, which pull in a chain of system libraries that must be present via `pkg-config`.  
+For Qt application theming (e.g. Clementine), install `qt5ct`/`qt6ct` as well.
 
 **Debian / Ubuntu:**
 ```bash
@@ -47,18 +48,20 @@ sudo apt install \
   libcairo2-dev \
   libgdk-pixbuf-2.0-dev \
   libgraphene-1.0-dev \
+  qt5ct \
+  qt6ct \
   pkg-config \
   build-essential
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S gtk4 libadwaita pango cairo gdk-pixbuf2 graphene pkgconf base-devel
+sudo pacman -S gtk4 libadwaita pango cairo gdk-pixbuf2 graphene qt5ct qt6ct pkgconf base-devel
 ```
 
 **Fedora:**
 ```bash
-sudo dnf install gtk4-devel libadwaita-devel pango-devel cairo-devel gdk-pixbuf2-devel graphene-devel pkg-config
+sudo dnf install gtk4-devel libadwaita-devel pango-devel cairo-devel gdk-pixbuf2-devel graphene-devel qt5ct qt6ct pkg-config
 ```
 
 ### Rust Toolchain
