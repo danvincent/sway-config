@@ -462,7 +462,7 @@ pub fn apply_theme(
     // Export platform theme for login sessions when qt5ct/qt6ct is installed.
     if let Some(platform_theme) = detect_qt_platform_theme() {
         let envd_path = base_path.join("environment.d/90-sway-config-qt.conf");
-        let envd_content = format!("QT_QPA_PLATFORMTHEME={}\n", platform_theme);
+        let envd_content = build_qt_envd_content(platform_theme);
         match write_file(&envd_path, &envd_content) {
             Ok(_) => result.files_written.push(envd_path.to_string_lossy().into()),
             Err(e) => result.errors.push(format!(
@@ -470,6 +470,9 @@ pub fn apply_theme(
                 e
             )),
         }
+
+        // Make Qt env vars effective for new app launches in the current session.
+        import_qt_env_to_session(platform_theme);
     }
 
     // Set wallpaper via swaymsg
@@ -617,6 +620,34 @@ fn detect_qt_platform_theme() -> Option<&'static str> {
     }
 }
 
+fn build_qt_envd_content(platform_theme: &str) -> String {
+    format!(
+        "QT_QPA_PLATFORMTHEME={platform_theme}\nQT_STYLE_OVERRIDE=Fusion\n",
+        platform_theme = platform_theme
+    )
+}
+
+fn import_qt_env_to_session(platform_theme: &str) {
+    use std::process::Command;
+    let qt_env = format!("QT_QPA_PLATFORMTHEME={}", platform_theme);
+    let style_env = "QT_STYLE_OVERRIDE=Fusion";
+
+    let _ = Command::new("dbus-update-activation-environment")
+        .args(["--systemd", &qt_env, style_env])
+        .status();
+
+    let _ = Command::new("systemctl")
+        .env("QT_QPA_PLATFORMTHEME", platform_theme)
+        .env("QT_STYLE_OVERRIDE", "Fusion")
+        .args([
+            "--user",
+            "import-environment",
+            "QT_QPA_PLATFORMTHEME",
+            "QT_STYLE_OVERRIDE",
+        ])
+        .status();
+}
+
 /// Embedded waybar style.css template (tokens in ${VAR} form).
 const WAYBAR_STYLE_TEMPLATE: &str = include_str!("../assets/waybar_style.css.tmpl");
 
@@ -655,5 +686,12 @@ mod tests {
         let conf = build_qtct_settings(&vars);
         assert!(conf.contains("icon_theme=Papirus"));
         assert!(conf.contains("general=Inter,11,-1,5,50,0,0,0,0,0"));
+    }
+
+    #[test]
+    fn test_build_qt_envd_content_includes_theme_and_style() {
+        let envd = build_qt_envd_content("qt5ct");
+        assert!(envd.contains("QT_QPA_PLATFORMTHEME=qt5ct"));
+        assert!(envd.contains("QT_STYLE_OVERRIDE=Fusion"));
     }
 }
