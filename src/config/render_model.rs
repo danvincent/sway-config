@@ -232,7 +232,7 @@ impl RenderModel {
                 .map(|m| format!("\"{}\"", m))
                 .collect();
 
-            let mut json_obj = serde_json::json!({
+            let json_obj = serde_json::json!({
                 "position": position_str,
                 "height": settings.waybar.height,
                 "modules-left": modules_left.iter().map(|m| m.trim_matches('"')).collect::<Vec<_>>(),
@@ -241,8 +241,7 @@ impl RenderModel {
             });
 
             // "tray" as a top-level key must be an object — omit it entirely;
-            // the tray module is already included via modules-right when enabled.
-            let _ = json_obj; // suppress unused warning
+            // the tray module is already included in modules-right when enabled.
             let config_json = serde_json::to_string_pretty(&json_obj)
                 .unwrap_or_else(|_| "{}".to_string());
 
