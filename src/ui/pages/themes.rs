@@ -1,6 +1,5 @@
 /// Themes configuration page
 use gtk4::prelude::*;
-use libadwaita::prelude::*;
 use crate::model::theme::ThemeSelection;
 use std::path::PathBuf;
 
@@ -52,14 +51,14 @@ impl ThemesPage {
     }
     
     /// Load themes into the page
-    pub fn load_themes(&self, selected: Option<&ThemeSelection>) {
+    pub fn load_themes(&self, selected: Option<&ThemeSelection>, custom_path: Option<&str>) {
         // Clear existing entries
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
         
         // Get available themes
-        let themes = Self::available_themes();
+        let themes = Self::available_themes(custom_path);
         
         for (idx, theme) in themes.iter().enumerate() {
             let row = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
@@ -93,23 +92,24 @@ impl ThemesPage {
     }
     
     /// Get available themes from the filesystem
-    pub fn available_themes() -> Vec<ThemeSelection> {
+    pub fn available_themes(custom_path: Option<&str>) -> Vec<ThemeSelection> {
         let mut themes = Vec::new();
+        let mut theme_paths: Vec<(PathBuf, String)> = Vec::new();
         
-        // Get home directory safely
-        let mut theme_paths = Vec::new();
+        // Priority 1: User themes dir (custom override or default ~/.config/sway/themes)
+        let user_path = if let Some(custom) = custom_path {
+            PathBuf::from(custom)
+        } else if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(format!("{}/.config/sway/themes", home))
+        } else {
+            PathBuf::from("/tmp/nonexistent")
+        };
+        theme_paths.push((user_path, "user".to_string()));
         
-        if let Ok(home) = std::env::var("HOME") {
-            // Priority 1: Custom themes in ~/.config/sway-configurator/themes
-            theme_paths.push(PathBuf::from(format!("{}/.config/sway-configurator/themes", home)));
-            // Priority 2: Reference SwayConfig themes in ~/source/SwayConfig/themes
-            theme_paths.push(PathBuf::from(format!("{}/source/SwayConfig/themes", home)));
-        }
+        // Priority 2: System themes
+        theme_paths.push((PathBuf::from("/usr/share/themes"), "system".to_string()));
         
-        // Priority 3: System themes in /usr/share/themes
-        theme_paths.push(PathBuf::from("/usr/share/themes"));
-        
-        for path in theme_paths {
+        for (path, source_label) in theme_paths {
             if path.exists() {
                 if let Ok(entries) = std::fs::read_dir(&path) {
                     for entry in entries {
@@ -119,15 +119,7 @@ impl ThemesPage {
                                 if let Some(name_str) = file_name.to_str() {
                                     if name_str.ends_with(".env") {
                                         let theme_name = name_str.trim_end_matches(".env").to_string();
-                                        let source = if path.to_string_lossy().contains("sway-configurator/themes") {
-                                            "custom".to_string()
-                                        } else if path.to_string_lossy().contains("source/SwayConfig/themes") {
-                                            "reference".to_string()
-                                        } else {
-                                            "system".to_string()
-                                        };
-                                        
-                                        themes.push(ThemeSelection::new(theme_name, source));
+                                        themes.push(ThemeSelection::new(theme_name, source_label.clone()));
                                     }
                                 }
                             }
@@ -137,7 +129,7 @@ impl ThemesPage {
             }
         }
         
-        // Sort and deduplicate by theme name (keeping first found, which is highest priority)
+        // Sort and deduplicate by theme name (user path has priority as it's scanned first)
         themes.sort_by(|a, b| a.name.cmp(&b.name));
         themes.dedup_by(|a, b| a.name == b.name);
         
@@ -153,5 +145,97 @@ impl ThemesPage {
 impl Default for ThemesPage {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::settings::Settings;
+    use crate::model::theme::ThemeSelection;
+    use crate::config::read_helpers::read_theme;
+
+    #[test]
+    fn test_available_themes_no_crash_with_no_paths() {
+        // Scanning non-existent paths returns empty vec without panicking
+        let themes = ThemesPage::available_themes(Some("/nonexistent/path/xyz"));
+        // We don't assert contents since the path doesn't exist, just no crash
+        drop(themes);
+    }
+
+    #[test]
+    fn test_read_theme_returns_none_for_default_settings() {
+        let settings = Settings::default();
+        assert!(read_theme(&settings).is_none());
+    }
+
+    #[test]
+    fn test_read_theme_returns_theme_when_set() {
+        let mut settings = Settings::default();
+        settings.theme = Some(ThemeSelection::new("my-theme", "local"));
+        let result = read_theme(&settings);
+        assert_eq!(result.unwrap().name, "my-theme");
+    }
+
+    #[test]
+    fn test_available_themes_does_not_include_source_swayconfig() {
+        // The ~/source/SwayConfig/themes path and ~/.config/sway-configurator/themes must NOT be scanned
+        let themes = ThemesPage::available_themes(None);
+        for theme in &themes {
+            assert!(!theme.source.contains("reference"), "Found reference source label");
+            assert!(!theme.source.contains("local"), "Found old sway-configurator local path label");
+        }
+    }
+
+    #[test]
+    fn test_available_themes_scans_custom_path_with_env_files() {
+        use std::fs;
+        let dir = std::env::temp_dir().join("themes-test-custom");
+        fs::create_dir_all(&dir).unwrap();
+        // Write a .env file
+        fs::write(dir.join("mytheme.env"), "# theme").unwrap();
+        
+        let themes = ThemesPage::available_themes(Some(dir.to_str().unwrap()));
+        assert!(themes.iter().any(|t| t.name == "mytheme" && t.source == "user"),
+            "custom path should produce a theme with source='user'");
+        
+        // Clean up
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_available_themes_system_path_scanned() {
+        // /usr/share/themes may or may not contain .env files on this system,
+        // but available_themes should not panic when called without custom path
+        let themes = ThemesPage::available_themes(None);
+        // All themes from /usr/share/themes must have source "system"
+        for t in themes.iter().filter(|t| t.source == "system") {
+            assert!(!t.name.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_available_themes_custom_path_overrides_default_user_path() {
+        use std::fs;
+        // Write a theme to the custom path
+        let custom_dir = std::env::temp_dir().join("themes-test-override-custom");
+        fs::create_dir_all(&custom_dir).unwrap();
+        fs::write(custom_dir.join("custom-only-theme.env"), "# custom").unwrap();
+
+        let themes = ThemesPage::available_themes(Some(custom_dir.to_str().unwrap()));
+
+        // The custom theme must be found with source "user"
+        assert!(
+            themes.iter().any(|t| t.name == "custom-only-theme" && t.source == "user"),
+            "custom-only-theme with source='user' not found: {:?}", themes
+        );
+
+        // No theme should have source "local" (old sway-configurator path is gone)
+        assert!(
+            themes.iter().all(|t| t.source != "local"),
+            "Unexpected 'local' source found: {:?}", themes
+        );
+
+        let _ = fs::remove_dir_all(&custom_dir);
     }
 }

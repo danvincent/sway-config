@@ -1,18 +1,271 @@
 /// Intermediate render model - generated from settings, separate from editable state
 use serde::{Deserialize, Serialize};
 use crate::model::settings::Settings;
+use crate::model::input::AccelProfile;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Complete render model with all configuration sections
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RenderModel {
+    /// Rendered outputs
+    pub outputs: Vec<RenderedOutput>,
+    /// Rendered inputs (keyboards and touchpads)
+    pub inputs: Vec<RenderedInput>,
+    /// Rendered idle configuration (optional)
+    pub idle: Option<RenderedIdle>,
+    /// Rendered waybar configuration (optional)
+    pub waybar: Option<RenderedWaybar>,
+    /// Rendered autostart entries
+    pub autostart: Vec<RenderedAutostart>,
     /// Theme name that will be applied
     pub theme_name: Option<String>,
     /// Theme source that will be used
     pub theme_source: Option<String>,
 }
 
+/// Rendered output with sway directive string
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedOutput {
+    /// Sway output directive
+    pub sway_directive: String,
+    /// Output name (identifier)
+    pub name: String,
+}
+
+/// Rendered input (keyboard or touchpad) with sway directive
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedInput {
+    /// Sway input directive block
+    pub sway_directive: String,
+    /// Input device identifier
+    pub identifier: String,
+}
+
+/// Rendered idle configuration
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedIdle {
+    /// Full swayidle exec command line
+    pub swayidle_exec: String,
+}
+
+/// Rendered waybar configuration
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedWaybar {
+    /// Waybar config JSON string
+    pub config_json: String,
+}
+
+/// Rendered autostart entry
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedAutostart {
+    /// Sway exec line
+    pub exec_line: String,
+    /// Description of the entry
+    pub description: String,
+}
+
 impl RenderModel {
     /// Generate a render model from the current settings
     pub fn from_settings(settings: &Settings) -> Self {
+        // Render outputs
+        let outputs = settings
+            .outputs
+            .iter()
+            .map(|output| {
+                let sway_directive = if output.enabled {
+                    let resolution_str = output
+                        .resolution
+                        .as_ref()
+                        .map(|res| format!("{}x{}", res.width, res.height))
+                        .unwrap_or_default();
+
+                    let resolution_part = if resolution_str.is_empty() {
+                        String::new()
+                    } else {
+                        format!("resolution {} ", resolution_str)
+                    };
+
+                    let transform_str = output.transform.to_sway_str();
+                    let transform_part = if transform_str == "normal" {
+                        String::new()
+                    } else {
+                        format!("transform {} ", transform_str)
+                    };
+
+                    format!(
+                        "output {} {}position {} {} scale {} {}",
+                        output.name,
+                        resolution_part,
+                        output.position.x,
+                        output.position.y,
+                        output.scale,
+                        transform_part
+                    )
+                    .trim()
+                    .to_string()
+                } else {
+                    format!("output {} disable", output.name)
+                };
+
+                RenderedOutput {
+                    sway_directive,
+                    name: output.name.clone(),
+                }
+            })
+            .collect();
+
+        // Render inputs
+        let mut inputs = Vec::new();
+
+        // Render keyboards
+        for keyboard in &settings.keyboards {
+            let sway_directive = format!(
+                "input \"{}\" {{\n    xkb_layout {}\n    xkb_variant {}\n    xkb_options {}\n    repeat_delay {}\n    repeat_rate {}\n}}",
+                keyboard.identifier,
+                if keyboard.xkb_layout.is_empty() {
+                    "us".to_string()
+                } else {
+                    keyboard.xkb_layout.clone()
+                },
+                if keyboard.xkb_variant.is_empty() {
+                    "\"\"".to_string()
+                } else {
+                    format!("\"{}\"", keyboard.xkb_variant)
+                },
+                if keyboard.xkb_options.is_empty() {
+                    "\"\"".to_string()
+                } else {
+                    format!("\"{}\"", keyboard.xkb_options)
+                },
+                keyboard.repeat_delay,
+                keyboard.repeat_rate
+            );
+
+            inputs.push(RenderedInput {
+                sway_directive,
+                identifier: keyboard.identifier.clone(),
+            });
+        }
+
+        // Render touchpads
+        for touchpad in &settings.touchpads {
+            let accel_profile_str = match touchpad.accel_profile {
+                AccelProfile::Adaptive => "adaptive",
+                AccelProfile::Flat => "flat",
+            };
+
+            let tap_str = if touchpad.tap_to_click { "enabled" } else { "disabled" };
+            let scroll_str = if touchpad.natural_scroll { "enabled" } else { "disabled" };
+            let dwt_str = if touchpad.dwt { "enabled" } else { "disabled" };
+            let left_str = if touchpad.left_handed { "enabled" } else { "disabled" };
+            let middle_str = if touchpad.middle_emulation { "enabled" } else { "disabled" };
+
+            let sway_directive = format!(
+                "input \"{}\" {{\n    tap {}\n    natural_scroll {}\n    dwt {}\n    accel_speed {}\n    accel_profile {}\n    left_handed {}\n    middle_emulation {}\n}}",
+                touchpad.identifier,
+                tap_str,
+                scroll_str,
+                dwt_str,
+                touchpad.accel_speed,
+                accel_profile_str,
+                left_str,
+                middle_str
+            );
+
+            inputs.push(RenderedInput {
+                sway_directive,
+                identifier: touchpad.identifier.clone(),
+            });
+        }
+
+        // Render idle configuration
+        let idle = if settings.idle.lock_timeout > 0 {
+            let mut exec_parts = vec![
+                format!("timeout {} '{}'", settings.idle.lock_timeout, settings.idle.lock_command),
+            ];
+
+            if settings.idle.before_sleep {
+                exec_parts.push(format!("before-sleep '{}'", settings.idle.lock_command));
+            }
+
+            if settings.idle.screen_off_timeout > 0 {
+                exec_parts.push(format!(
+                    "timeout {} 'swaymsg \"output * dpms off\"' resume 'swaymsg \"output * dpms on\"'",
+                    settings.idle.screen_off_timeout
+                ));
+            }
+
+            Some(RenderedIdle {
+                swayidle_exec: format!("exec swayidle -w {}", exec_parts.join(" ")),
+            })
+        } else {
+            None
+        };
+
+        // Render waybar configuration
+        let waybar = if settings.waybar.enabled {
+            let modules_right: Vec<String> = settings
+                .waybar
+                .modules_right
+                .iter()
+                .filter(|m| m.enabled)
+                .map(|m| format!("\"{}\"", m.name))
+                .collect();
+
+            let position_str = match settings.waybar.position {
+                crate::model::waybar::BarPosition::Top => "top",
+                crate::model::waybar::BarPosition::Bottom => "bottom",
+                crate::model::waybar::BarPosition::Left => "left",
+                crate::model::waybar::BarPosition::Right => "right",
+            };
+
+            let modules_left: Vec<String> = settings
+                .waybar
+                .modules_left
+                .iter()
+                .map(|m| format!("\"{}\"", m))
+                .collect();
+
+            let modules_center: Vec<String> = settings
+                .waybar
+                .modules_center
+                .iter()
+                .map(|m| format!("\"{}\"", m))
+                .collect();
+
+            let config_json = serde_json::json!({
+                "position": position_str,
+                "height": settings.waybar.height,
+                "modules-left": serde_json::Value::Array(
+                    modules_left.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
+                ),
+                "modules-center": serde_json::Value::Array(
+                    modules_center.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
+                ),
+                "modules-right": serde_json::Value::Array(
+                    modules_right.iter().map(|m| serde_json::Value::String(m.trim_matches('"').to_string())).collect()
+                ),
+                "tray": settings.waybar.tray,
+            })
+            .to_string();
+
+            Some(RenderedWaybar { config_json })
+        } else {
+            None
+        };
+
+        // Render autostart entries
+        let autostart = settings
+            .autostart
+            .entries
+            .iter()
+            .filter(|entry| entry.enabled)
+            .map(|entry| RenderedAutostart {
+                exec_line: format!("# {}\nexec {}", entry.description, entry.command),
+                description: entry.description.clone(),
+            })
+            .collect();
+
+        // Theme
         let (theme_name, theme_source) = settings
             .theme
             .as_ref()
@@ -20,9 +273,57 @@ impl RenderModel {
             .unwrap_or((None, None));
 
         RenderModel {
+            outputs,
+            inputs,
+            idle,
+            waybar,
+            autostart,
             theme_name,
             theme_source,
         }
+    }
+
+    /// Render outputs.conf content
+    pub fn to_sway_outputs_conf(&self) -> String {
+        self.outputs
+            .iter()
+            .map(|output| output.sway_directive.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Render inputs.conf content
+    pub fn to_sway_inputs_conf(&self) -> String {
+        self.inputs
+            .iter()
+            .map(|input| input.sway_directive.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    /// Render idle.conf content
+    pub fn to_sway_idle_conf(&self) -> String {
+        self.idle
+            .as_ref()
+            .map(|idle| idle.swayidle_exec.clone())
+            .unwrap_or_default()
+    }
+
+    /// Render waybar config.json content
+    pub fn to_waybar_config_json(&self) -> String {
+        self.waybar
+            .as_ref()
+            .map(|waybar| waybar.config_json.clone())
+            .unwrap_or_default()
+    }
+
+    /// Render autostart.conf content
+    pub fn to_autostart_conf(&self) -> String {
+        self.autostart
+            .iter()
+            .map(|entry| entry.exec_line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 }
 
@@ -37,6 +338,7 @@ mod tests {
         let model = RenderModel::from_settings(&settings);
         assert!(model.theme_name.is_none());
         assert!(model.theme_source.is_none());
+        assert!(model.outputs.is_empty());
     }
 
     #[test]
@@ -51,6 +353,11 @@ mod tests {
     #[test]
     fn test_render_model_serialization() {
         let model = RenderModel {
+            outputs: vec![],
+            inputs: vec![],
+            idle: None,
+            waybar: None,
+            autostart: vec![],
             theme_name: Some("light".to_string()),
             theme_source: Some("custom".to_string()),
         };
@@ -62,3 +369,4 @@ mod tests {
         assert_eq!(model, deserialized);
     }
 }
+

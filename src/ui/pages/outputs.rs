@@ -1,8 +1,6 @@
 /// Outputs configuration page (displays/monitors)
 #[cfg(feature = "gtk")]
 use gtk4::prelude::*;
-#[cfg(feature = "gtk")]
-use libadwaita::prelude::*;
 
 #[cfg(feature = "gtk")]
 use crate::model::output::OutputConfig;

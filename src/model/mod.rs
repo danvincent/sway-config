@@ -7,6 +7,7 @@ pub mod idle;
 pub mod waybar;
 pub mod autostart;
 pub mod notifications;
+pub mod general;
 
 pub use settings::Settings;
 pub use theme::ThemeSelection;

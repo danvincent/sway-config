@@ -2,7 +2,6 @@
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use crate::model::waybar::{WaybarConfig, BarPosition};
-use crate::config::feature;
 
 /// Waybar page - for configuring the status bar
 pub struct WaybarPage {
@@ -36,31 +35,23 @@ impl WaybarPage {
         let enabled_switch = libadwaita::SwitchRow::new();
         enabled_switch.set_title("Enable waybar");
         enabled_switch.set_subtitle("Show the status bar on screen");
-        enabled_switch.set_has_subtitle(true);
         enabled_switch.set_active(true);
         preferences_group.add(&enabled_switch);
         
         // Position combo
         let position_model = gtk4::StringList::new(&["Top", "Bottom", "Left", "Right"]);
-        let position_combo = libadwaita::ComboRow::new(Some(position_model), None);
+        let position_combo = libadwaita::ComboRow::new();
+        position_combo.set_model(Some(&position_model));
         position_combo.set_title("Position");
         position_combo.set_subtitle("Position of the bar on screen");
-        position_combo.set_has_subtitle(true);
         position_combo.set_selected(0); // Default: Top
         preferences_group.add(&position_combo);
         
         // Height spin row
-        let height_spin = libadwaita::SpinRow::new(
-            gtk4::Adjustment::new(30.0, 10.0, 200.0, 1.0, 5.0, 0.0),
-            1.0,
-            0,
-        );
+        let adj = gtk4::Adjustment::new(30.0, 10.0, 200.0, 1.0, 5.0, 0.0);
+        let height_spin = libadwaita::SpinRow::new(Some(&adj), 1.0, 0);
         height_spin.set_title("Height");
         height_spin.set_subtitle("Height of the bar in pixels");
-        height_spin.set_has_subtitle(true);
-        height_spin.set_suffix_expression(Some(
-            gtk4::Expression::constant("px")
-        ));
         preferences_group.add(&height_spin);
         
         prefs_page.add(&preferences_group);

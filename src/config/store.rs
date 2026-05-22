@@ -80,6 +80,22 @@ impl SettingsStore {
         fs::write(&self.path, content)?;
         Ok(())
     }
+
+    /// Load settings from a base directory (base_dir/settings.toml)
+    pub fn open_at(base_dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = base_dir.join("settings.toml");
+        Self::load(path)
+    }
+
+    /// Create a test store using a temporary directory; settings start as defaults.
+    /// Intended for use with SWAY_CONFIGURATOR_TEST=1.
+    pub fn test_store(dir: &Path) -> Self {
+        let path = dir.join("settings.toml");
+        SettingsStore {
+            path,
+            settings: Settings::default(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -153,5 +169,35 @@ mod tests {
             "resolve_config_path should use .config fallback when both env vars are unset: {}",
             path.display()
         );
+    }
+
+    #[test]
+    fn test_open_at_creates_store_with_correct_path() {
+        let dir = std::env::temp_dir().join("sway-configurator-test-open-at");
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = SettingsStore::open_at(&dir).unwrap();
+        assert!(store.path.ends_with("settings.toml"));
+        assert!(store.path.starts_with(&dir));
+    }
+
+    #[test]
+    fn test_test_store_uses_provided_dir() {
+        let dir = std::env::temp_dir().join("sway-configurator-test-store");
+        let store = SettingsStore::test_store(&dir);
+        assert!(store.path.ends_with("settings.toml"));
+        assert!(store.path.starts_with(&dir));
+        assert!(store.settings.theme.is_none());
+    }
+
+    #[test]
+    fn test_open_at_roundtrip_save_and_load() {
+        let dir = std::env::temp_dir().join("sway-configurator-test-roundtrip");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut store = SettingsStore::open_at(&dir).unwrap();
+        store.settings.idle.lock_timeout = 999;
+        store.save().unwrap();
+        
+        let reloaded = SettingsStore::open_at(&dir).unwrap();
+        assert_eq!(reloaded.settings.idle.lock_timeout, 999);
     }
 }

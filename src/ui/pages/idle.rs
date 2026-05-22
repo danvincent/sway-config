@@ -2,7 +2,6 @@
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use crate::model::idle::IdleConfig;
-use crate::config::feature;
 
 /// Idle page - for configuring idle behavior
 pub struct IdlePage {
@@ -34,31 +33,17 @@ impl IdlePage {
         preferences_group.set_title("Idle Settings");
         
         // Lock timeout spin row
-        let lock_timeout_spin = libadwaita::SpinRow::new(
-            gtk4::Adjustment::new(300.0, 0.0, 3600.0, 1.0, 60.0, 0.0),
-            1.0,
-            0,
-        );
+        let adj = gtk4::Adjustment::new(300.0, 0.0, 3600.0, 1.0, 60.0, 0.0);
+        let lock_timeout_spin = libadwaita::SpinRow::new(Some(&adj), 1.0, 0);
         lock_timeout_spin.set_title("Lock after");
         lock_timeout_spin.set_subtitle("Lock screen after this many seconds (0 = disabled)");
-        lock_timeout_spin.set_has_subtitle(true);
-        lock_timeout_spin.set_suffix_expression(Some(
-            gtk4::Expression::constant("seconds")
-        ));
         preferences_group.add(&lock_timeout_spin);
         
         // Screen off timeout spin row
-        let screen_off_timeout_spin = libadwaita::SpinRow::new(
-            gtk4::Adjustment::new(0.0, 0.0, 3600.0, 1.0, 60.0, 0.0),
-            1.0,
-            0,
-        );
+        let adj = gtk4::Adjustment::new(0.0, 0.0, 3600.0, 1.0, 60.0, 0.0);
+        let screen_off_timeout_spin = libadwaita::SpinRow::new(Some(&adj), 1.0, 0);
         screen_off_timeout_spin.set_title("Screen off after");
         screen_off_timeout_spin.set_subtitle("Turn screen off after this many seconds (0 = disabled)");
-        screen_off_timeout_spin.set_has_subtitle(true);
-        screen_off_timeout_spin.set_suffix_expression(Some(
-            gtk4::Expression::constant("seconds")
-        ));
         preferences_group.add(&screen_off_timeout_spin);
         
         // Lock command entry
@@ -71,7 +56,6 @@ impl IdlePage {
         let before_sleep_switch = libadwaita::SwitchRow::new();
         before_sleep_switch.set_title("Lock before sleep");
         before_sleep_switch.set_subtitle("Lock screen when system goes to sleep");
-        before_sleep_switch.set_has_subtitle(true);
         before_sleep_switch.set_active(true);
         preferences_group.add(&before_sleep_switch);
         

@@ -36,7 +36,7 @@ impl SwayConfigWindow {
         // Create the main navigation split view
         let split_view = libadwaita::NavigationSplitView::new();
         split_view.set_sidebar_width_unit(libadwaita::LengthUnit::Sp);
-        split_view.set_sidebar_width(200.0);
+        split_view.set_max_sidebar_width(200.0);
 
         // Create sidebar with page list
         let list_box = gtk4::ListBox::new();
@@ -135,7 +135,6 @@ impl SwayConfigWindow {
         // Wire up the list box row-selected signal to switch pages
         {
             let stack_clone = window_obj.stack.clone();
-            let list_box_clone = window_obj.list_box.clone();
             let current_page_clone = window_obj.current_page.clone();
             let page_ids = crate::ui::pages::page_ids();
 

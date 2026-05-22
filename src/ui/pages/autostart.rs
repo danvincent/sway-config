@@ -1,7 +1,6 @@
 /// Autostart configuration page
 use gtk4::prelude::*;
-use libadwaita::prelude::*;
-use crate::model::autostart::{AutostartConfig, AutostartEntry};
+use crate::model::autostart::AutostartConfig;
 
 /// Autostart page - for managing autostart programs
 pub struct AutostartPage {

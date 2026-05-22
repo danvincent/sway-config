@@ -1,8 +1,6 @@
 /// Inputs configuration page (keyboard, mouse)
 #[cfg(feature = "gtk")]
 use gtk4::prelude::*;
-#[cfg(feature = "gtk")]
-use libadwaita::prelude::*;
 
 #[cfg(feature = "gtk")]
 use crate::model::input::{KeyboardConfig, TouchpadConfig};
