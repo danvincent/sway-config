@@ -47,6 +47,11 @@ impl ApplyBar {
         self.widget.upcast_ref()
     }
 
+    /// Clone the apply bar's widget as a gtk4::Widget
+    pub fn clone_widget(&self) -> gtk4::Widget {
+        self.widget.clone().upcast()
+    }
+
     /// Set visibility based on dirty state
     pub fn set_visible_if_dirty(&self, dirty: bool) {
         self.widget.set_visible(dirty);

@@ -22,6 +22,15 @@ pub struct SwayConfigWindow {
     stack: gtk4::Stack,
     /// List box for navigation
     list_box: gtk4::ListBox,
+    /// Page structs stored to keep them alive and allow method calls
+    outputs_page: Rc<OutputsPage>,
+    inputs_page: Rc<InputsPage>,
+    idle_page: Rc<IdlePage>,
+    waybar_page: Rc<WaybarPage>,
+    autostart_page: Rc<AutostartPage>,
+    notifications_page: Rc<NotificationsPage>,
+    themes_page: Rc<ThemesPage>,
+    general_page: Rc<GeneralPage>,
 }
 
 impl SwayConfigWindow {
@@ -42,7 +51,7 @@ impl SwayConfigWindow {
         let list_box = gtk4::ListBox::new();
         list_box.set_selection_mode(gtk4::SelectionMode::Single);
 
-        // Add page items in order: Outputs, Inputs, Idle, Waybar, Autostart, Notifications, Themes
+        // Add page items in order: Outputs, Inputs, Idle, Waybar, Autostart, Notifications, Themes, General
         let page_configs = vec![
             ("Outputs", "outputs"),
             ("Inputs", "inputs"),
@@ -51,6 +60,7 @@ impl SwayConfigWindow {
             ("Autostart", "autostart"),
             ("Notifications", "notifications"),
             ("Themes", "themes"),
+            ("General", "general"),
         ];
 
         for (label, _id) in &page_configs {
@@ -82,26 +92,29 @@ impl SwayConfigWindow {
         stack.set_transition_duration(200);
 
         // Create all page widgets and add to stack
-        let outputs_page = OutputsPage::new();
+        let outputs_page = Rc::new(OutputsPage::new(app_state.clone()));
         stack.add_named(outputs_page.widget(), Some("outputs"));
 
-        let inputs_page = InputsPage::new();
+        let inputs_page = Rc::new(InputsPage::new(app_state.clone()));
         stack.add_named(inputs_page.widget(), Some("inputs"));
 
-        let idle_page = IdlePage::new();
+        let idle_page = Rc::new(IdlePage::new(app_state.clone()));
         stack.add_named(idle_page.widget(), Some("idle"));
 
-        let waybar_page = WaybarPage::new();
+        let waybar_page = Rc::new(WaybarPage::new(app_state.clone()));
         stack.add_named(waybar_page.widget(), Some("waybar"));
 
-        let autostart_page = AutostartPage::new();
+        let autostart_page = Rc::new(AutostartPage::new(app_state.clone()));
         stack.add_named(autostart_page.widget(), Some("autostart"));
 
-        let notifications_page = NotificationsPage::new();
+        let notifications_page = Rc::new(NotificationsPage::new(app_state.clone()));
         stack.add_named(notifications_page.widget(), Some("notifications"));
 
-        let themes_page = ThemesPage::new();
+        let themes_page = Rc::new(ThemesPage::new(app_state.clone()));
         stack.add_named(themes_page.widget(), Some("themes"));
+
+        let general_page = Rc::new(GeneralPage::new(app_state.clone()));
+        stack.add_named(general_page.widget(), Some("general"));
 
         // Set initial visible page
         stack.set_visible_child_name("outputs");
@@ -130,15 +143,41 @@ impl SwayConfigWindow {
             current_page: Rc::new(RefCell::new("outputs".to_string())),
             stack,
             list_box,
+            outputs_page,
+            inputs_page,
+            idle_page,
+            waybar_page,
+            autostart_page,
+            notifications_page,
+            themes_page,
+            general_page,
         };
 
-        // Wire up the list box row-selected signal to switch pages
+        // Wire up navigation
+        window_obj.setup_navigation();
+
+        // Setup initial state visibility
+        window_obj.update_apply_bar_visibility();
+        
+        // Select the first row by default and trigger on_navigate
+        if let Some(first_row) = window_obj.list_box.row_at_index(0) {
+            window_obj.list_box.select_row(Some(&first_row));
+            window_obj.outputs_page.on_navigate();
+            window_obj.update_apply_bar_visibility();
+        }
+
+        window_obj
+    }
+
+    /// Setup navigation signal handlers
+    fn setup_navigation(&self) {
+        // Wire list_box row-selected to switch stack
         {
-            let stack_clone = window_obj.stack.clone();
-            let current_page_clone = window_obj.current_page.clone();
+            let stack_clone = self.stack.clone();
+            let current_page_clone = self.current_page.clone();
             let page_ids = crate::ui::pages::page_ids();
 
-            window_obj.list_box.connect_row_selected(move |_list_box, row| {
+            self.list_box.connect_row_selected(move |_list_box, row| {
                 if let Some(row) = row {
                     let index = row.index();
                     if index >= 0 {
@@ -153,15 +192,37 @@ impl SwayConfigWindow {
             });
         }
 
-        // Setup initial state visibility
-        window_obj.update_apply_bar_visibility();
-        
-        // Select the first row by default
-        if let Some(first_row) = window_obj.list_box.row_at_index(0) {
-            window_obj.list_box.select_row(Some(&first_row));
-        }
+        // Wire stack visible-child-name change → call on_navigate on the newly visible page
+        {
+            let outputs_page = Rc::clone(&self.outputs_page);
+            let inputs_page = Rc::clone(&self.inputs_page);
+            let idle_page = Rc::clone(&self.idle_page);
+            let waybar_page = Rc::clone(&self.waybar_page);
+            let autostart_page = Rc::clone(&self.autostart_page);
+            let notifications_page = Rc::clone(&self.notifications_page);
+            let themes_page = Rc::clone(&self.themes_page);
+            let general_page = Rc::clone(&self.general_page);
+            let apply_bar = self.apply_bar.clone_widget();
+            let app_state = self.app_state.clone();
 
-        window_obj
+            self.stack.connect_notify_local(Some("visible-child-name"), move |stack, _| {
+                if let Some(name) = stack.visible_child_name() {
+                    match name.as_str() {
+                        "outputs" => outputs_page.on_navigate(),
+                        "inputs" => inputs_page.on_navigate(),
+                        "idle" => idle_page.on_navigate(),
+                        "waybar" => waybar_page.on_navigate(),
+                        "autostart" => autostart_page.on_navigate(),
+                        "notifications" => notifications_page.on_navigate(),
+                        "themes" => themes_page.on_navigate(),
+                        "general" => general_page.on_navigate(),
+                        _ => {}
+                    }
+                }
+                // refresh apply bar after any state changes from on_navigate
+                apply_bar.set_visible(app_state.borrow().is_dirty());
+            });
+        }
     }
 
     /// Navigate to a specific page

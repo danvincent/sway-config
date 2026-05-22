@@ -1,7 +1,10 @@
 /// Notifications configuration page
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::model::notifications::{NotificationsConfig, NotifPosition};
+use crate::state::AppState;
 
 /// Notifications page - for configuring notifications
 pub struct NotificationsPage {
@@ -12,11 +15,12 @@ pub struct NotificationsPage {
     follow_focus_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 impl NotificationsPage {
     /// Create a new notifications page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::new();
@@ -84,7 +88,18 @@ impl NotificationsPage {
             follow_focus_switch,
             preferences_group,
             banner_group,
+            app_state,
         }
+    }
+    
+    /// Navigate to this page - load notifications config from app_state
+    pub fn on_navigate(&self) {
+        let config = self.app_state.borrow().settings().notifications.clone();
+        self.load_notifications(&config);
+        
+        // Check for notification daemon
+        let has_daemon = crate::config::feature::has_notification_daemon();
+        self.bind_detection(has_daemon);
     }
     
     /// Load notifications configuration into the page
@@ -134,6 +149,7 @@ impl NotificationsPage {
 
 impl Default for NotificationsPage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }

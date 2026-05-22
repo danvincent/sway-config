@@ -1,7 +1,10 @@
 /// Waybar configuration page
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::model::waybar::{WaybarConfig, BarPosition};
+use crate::state::AppState;
 
 /// Waybar page - for configuring the status bar
 pub struct WaybarPage {
@@ -11,11 +14,12 @@ pub struct WaybarPage {
     height_spin: libadwaita::SpinRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 impl WaybarPage {
     /// Create a new waybar page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::new();
@@ -71,7 +75,18 @@ impl WaybarPage {
             height_spin,
             preferences_group,
             banner_group,
+            app_state,
         }
+    }
+    
+    /// Navigate to this page - load waybar config from app_state
+    pub fn on_navigate(&self) {
+        let config = self.app_state.borrow().settings().waybar.clone();
+        self.load_waybar(&config);
+        
+        // Check for waybar
+        let has_waybar = crate::config::feature::has_waybar();
+        self.bind_detection(has_waybar);
     }
     
     /// Load waybar configuration into the page
@@ -117,6 +132,7 @@ impl WaybarPage {
 
 impl Default for WaybarPage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }

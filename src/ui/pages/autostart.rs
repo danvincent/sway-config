@@ -1,16 +1,20 @@
 /// Autostart configuration page
 use gtk4::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::model::autostart::AutostartConfig;
+use crate::state::AppState;
 
 /// Autostart page - for managing autostart programs
 pub struct AutostartPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 impl AutostartPage {
     /// Create a new autostart page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::new();
@@ -54,7 +58,13 @@ impl AutostartPage {
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
         
-        AutostartPage { widget, list_box }
+        AutostartPage { widget, list_box, app_state }
+    }
+    
+    /// Navigate to this page - load autostart config from app_state
+    pub fn on_navigate(&self) {
+        let config = self.app_state.borrow().settings().autostart.clone();
+        self.load_autostart(&config);
     }
     
     /// Load autostart configuration into the page
@@ -104,6 +114,7 @@ impl AutostartPage {
 
 impl Default for AutostartPage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }

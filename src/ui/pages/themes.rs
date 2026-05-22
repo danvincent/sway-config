@@ -1,17 +1,21 @@
 /// Themes configuration page
 use gtk4::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::model::theme::ThemeSelection;
+use crate::state::AppState;
 use std::path::PathBuf;
 
 /// Themes page - for configuring themes
 pub struct ThemesPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 impl ThemesPage {
     /// Create a new themes page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::new();
@@ -47,7 +51,17 @@ impl ThemesPage {
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
         
-        ThemesPage { widget, list_box }
+        ThemesPage { widget, list_box, app_state }
+    }
+    
+    /// Navigate to this page - load themes from app_state
+    pub fn on_navigate(&self) {
+        let state = self.app_state.borrow();
+        let selected = state.settings().theme.clone();
+        let custom_path = state.settings().custom_themes_path.clone();
+        drop(state);
+        
+        self.load_themes(selected.as_ref(), custom_path.as_deref());
     }
     
     /// Load themes into the page
@@ -144,7 +158,8 @@ impl ThemesPage {
 
 impl Default for ThemesPage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }
 

@@ -4,6 +4,7 @@
 use sway_configurator::state::AppState;
 use sway_configurator::model::settings::Settings;
 use sway_configurator::model::theme::ThemeSelection;
+use sway_configurator::model::output::OutputConfig;
 use sway_configurator::ui::pages;
 
 #[test]
@@ -94,8 +95,8 @@ fn test_page_ids_are_unique() {
 fn test_sidebar_order() {
     let ids = pages::page_ids();
     
-    // Must have exactly 7 pages in the correct order
-    let expected = &["outputs", "inputs", "idle", "waybar", "autostart", "notifications", "themes"];
+    // Must have exactly 8 pages in the correct order
+    let expected = &["outputs", "inputs", "idle", "waybar", "autostart", "notifications", "themes", "general"];
     assert_eq!(
         ids, expected,
         "Page IDs must be in the exact required order"
@@ -124,7 +125,7 @@ fn test_page_ids_valid_values() {
     let ids = pages::page_ids();
     let valid_page_ids = [
         "outputs", "inputs", "idle", "waybar",
-        "autostart", "notifications", "themes"
+        "autostart", "notifications", "themes", "general"
     ];
     
     // All page IDs should be in the valid list
@@ -135,4 +136,149 @@ fn test_page_ids_valid_values() {
             id
         );
     }
+}
+
+// ============ Tests for Fix 1: refresh_* methods ============
+
+#[test]
+fn test_refresh_does_not_dirty_state() {
+    let mut state = AppState::new(Settings::default());
+    state.refresh_outputs(vec![]);
+    assert!(!state.is_dirty(), "refresh_outputs should not mark state dirty");
+}
+
+#[test]
+fn test_set_outputs_dirties_state() {
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![]);
+    assert!(state.is_dirty(), "set_outputs should mark state dirty");
+}
+
+#[test]
+fn test_refresh_outputs_updates_settings() {
+    let mut state = AppState::new(Settings::default());
+    let output = OutputConfig {
+        name: "HDMI-1".to_string(),
+        enabled: true,
+        resolution: None,
+        refresh_rate: None,
+        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        scale: 1.0,
+        transform: sway_configurator::model::output::Transform::Normal,
+    };
+    state.refresh_outputs(vec![output.clone()]);
+    assert_eq!(state.settings().outputs.len(), 1);
+    assert_eq!(state.settings().outputs[0].name, "HDMI-1");
+    assert!(!state.is_dirty(), "refresh_outputs should not mark dirty");
+}
+
+// ============ Section-specific detection guard tests ============
+// These verify the helpers used by on_navigate() guards in outputs.rs and inputs.rs.
+// OutputsPage calls should_refresh_outputs(); InputsPage calls
+// should_refresh_keyboards() / should_refresh_touchpads(). The helpers are
+// tested here directly so a regression to is_dirty() would be caught.
+
+#[test]
+fn test_outputs_guard_passes_when_keyboards_dirty() {
+    // Editing keyboards must not suppress outputs detection.
+    let mut state = AppState::new(Settings::default());
+    state.set_keyboards(vec![sway_configurator::model::input::KeyboardConfig {
+        identifier: "kbd".to_string(),
+        xkb_layout: "gb".to_string(),
+        xkb_variant: String::new(),
+        xkb_options: String::new(),
+        repeat_delay: 600,
+        repeat_rate: 25,
+    }]);
+    assert!(state.is_dirty(), "global dirty after keyboard edit");
+    assert!(state.should_refresh_outputs(), "outputs detection must still proceed");
+}
+
+#[test]
+fn test_outputs_guard_blocks_when_outputs_dirty() {
+    // When the user has edited outputs the guard must block detection to
+    // preserve their edits. should_refresh_outputs() returns false.
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![OutputConfig {
+        name: "user-edit".to_string(),
+        enabled: true,
+        resolution: None,
+        refresh_rate: None,
+        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        scale: 1.0,
+        transform: sway_configurator::model::output::Transform::Normal,
+    }]);
+    assert!(!state.should_refresh_outputs(), "outputs guard must block detection when outputs are dirty");
+}
+
+#[test]
+fn test_keyboards_guard_passes_when_touchpads_dirty() {
+    // Editing touchpads must not suppress keyboard detection.
+    let mut state = AppState::new(Settings::default());
+    state.set_touchpads(vec![sway_configurator::model::input::TouchpadConfig {
+        identifier: "pad".to_string(),
+        tap_to_click: true,
+        natural_scroll: false,
+        dwt: false,
+        accel_speed: 0.0,
+        accel_profile: sway_configurator::model::input::AccelProfile::Adaptive,
+        left_handed: false,
+        middle_emulation: false,
+    }]);
+    assert!(state.should_refresh_keyboards(), "keyboard detection must still proceed when only touchpads are dirty");
+}
+
+#[test]
+fn test_touchpads_guard_passes_when_keyboards_dirty() {
+    // Editing keyboards must not suppress touchpad detection.
+    let mut state = AppState::new(Settings::default());
+    state.set_keyboards(vec![sway_configurator::model::input::KeyboardConfig {
+        identifier: "kbd".to_string(),
+        xkb_layout: "gb".to_string(),
+        xkb_variant: String::new(),
+        xkb_options: String::new(),
+        repeat_delay: 600,
+        repeat_rate: 25,
+    }]);
+    assert!(state.should_refresh_touchpads(), "touchpad detection must still proceed when only keyboards are dirty");
+}
+
+#[test]
+fn test_inputs_guard_passes_when_outputs_dirty() {
+    // An edit to outputs must not suppress inputs detection.
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![OutputConfig {
+        name: "DP-1".to_string(),
+        enabled: true,
+        resolution: None,
+        refresh_rate: None,
+        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        scale: 1.0,
+        transform: sway_configurator::model::output::Transform::Normal,
+    }]);
+    assert!(state.should_refresh_keyboards(), "keyboard detection must proceed when only outputs are dirty");
+    assert!(state.should_refresh_touchpads(), "touchpad detection must proceed when only outputs are dirty");
+}
+
+#[test]
+fn test_mark_clean_restores_all_detection_guards() {
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![]);
+    state.set_keyboards(vec![]);
+    state.mark_clean();
+    assert!(state.should_refresh_outputs(), "outputs detection must be enabled after clean");
+    assert!(state.should_refresh_keyboards(), "keyboard detection must be enabled after clean");
+    assert!(state.should_refresh_touchpads(), "touchpad detection must be enabled after clean");
+}
+
+// ============ General page test ============
+
+#[test]
+fn test_general_page_reads_terminal_from_settings() {
+    use sway_configurator::config::read_helpers::read_general;
+    
+    let mut settings = Settings::default();
+    settings.general.terminal = "alacritty".to_string();
+    let config = read_general(&settings);
+    assert_eq!(config.terminal, "alacritty");
 }

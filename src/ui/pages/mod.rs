@@ -13,6 +13,8 @@ pub mod autostart;
 pub mod notifications;
 #[cfg(feature = "gtk")]
 pub mod themes;
+#[cfg(feature = "gtk")]
+pub mod general;
 
 #[cfg(feature = "gtk")]
 pub use outputs::OutputsPage;
@@ -28,9 +30,11 @@ pub use autostart::AutostartPage;
 pub use notifications::NotificationsPage;
 #[cfg(feature = "gtk")]
 pub use themes::ThemesPage;
+#[cfg(feature = "gtk")]
+pub use general::GeneralPage;
 
 /// Returns page IDs in sidebar display order.
 /// This function is not gated by cfg so tests can call it without GTK.
 pub fn page_ids() -> &'static [&'static str] {
-    &["outputs", "inputs", "idle", "waybar", "autostart", "notifications", "themes"]
+    &["outputs", "inputs", "idle", "waybar", "autostart", "notifications", "themes", "general"]
 }

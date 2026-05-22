@@ -1,9 +1,14 @@
 /// Inputs configuration page (keyboard, mouse)
 #[cfg(feature = "gtk")]
 use gtk4::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[cfg(feature = "gtk")]
 use crate::model::input::{KeyboardConfig, TouchpadConfig};
+
+#[cfg(feature = "gtk")]
+use crate::state::AppState;
 
 /// Inputs page - for configuring input devices
 #[cfg(feature = "gtk")]
@@ -11,12 +16,13 @@ pub struct InputsPage {
     widget: gtk4::Box,
     keyboards_list: gtk4::ListBox,
     touchpads_list: gtk4::ListBox,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 #[cfg(feature = "gtk")]
 impl InputsPage {
     /// Create a new inputs page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
@@ -67,7 +73,41 @@ impl InputsPage {
         scrolled.set_child(Some(&main_box));
         widget.append(&scrolled);
         
-        InputsPage { widget, keyboards_list, touchpads_list }
+        InputsPage { widget, keyboards_list, touchpads_list, app_state }
+    }
+
+    /// Detect inputs and load them
+    pub fn on_navigate(&self) {
+        // Keyboards and touchpads are detected independently so that unsaved edits
+        // in one subsection do not prevent detection from refreshing the other.
+        let need_keyboards = self.app_state.borrow().should_refresh_keyboards();
+        let need_touchpads = self.app_state.borrow().should_refresh_touchpads();
+
+        if need_keyboards || need_touchpads {
+            let all_inputs = crate::config::detect::detect_inputs();
+
+            if need_keyboards {
+                let keyboard_inputs = crate::config::detect::detect_keyboards(&all_inputs);
+                let keyboards: Vec<KeyboardConfig> = keyboard_inputs
+                    .iter()
+                    .map(|i| KeyboardConfig::from_sway(i))
+                    .collect();
+                self.app_state.borrow_mut().refresh_keyboards(keyboards);
+            }
+
+            if need_touchpads {
+                let touchpad_inputs = crate::config::detect::detect_touchpads(&all_inputs);
+                let touchpads: Vec<TouchpadConfig> = touchpad_inputs
+                    .iter()
+                    .map(|i| TouchpadConfig::from_sway(i))
+                    .collect();
+                self.app_state.borrow_mut().refresh_touchpads(touchpads);
+            }
+        }
+        
+        // Load into UI from whatever is in AppState (user edits or detected)
+        self.load_keyboards(&self.app_state.borrow().settings().keyboards);
+        self.load_touchpads(&self.app_state.borrow().settings().touchpads);
     }
 
     /// Load keyboards into the list
@@ -141,7 +181,8 @@ impl InputsPage {
 #[cfg(feature = "gtk")]
 impl Default for InputsPage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }
 

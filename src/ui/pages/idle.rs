@@ -1,7 +1,10 @@
 /// Idle configuration page (screensaver, lock)
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::model::idle::IdleConfig;
+use crate::state::AppState;
 
 /// Idle page - for configuring idle behavior
 pub struct IdlePage {
@@ -12,11 +15,12 @@ pub struct IdlePage {
     before_sleep_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    app_state: Rc<RefCell<AppState>>,
 }
 
 impl IdlePage {
     /// Create a new idle page
-    pub fn new() -> Self {
+    pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::new();
@@ -77,7 +81,20 @@ impl IdlePage {
             before_sleep_switch,
             preferences_group,
             banner_group,
+            app_state,
         }
+    }
+    
+    /// Navigate to this page - load idle config from app_state
+    pub fn on_navigate(&self) {
+        let config = self.app_state.borrow().settings().idle.clone();
+        self.load_idle(&config);
+        
+        // Check for required binaries
+        let has_swayidle = crate::config::feature::has_swayidle();
+        let has_locker = crate::config::feature::has_screen_locker();
+        
+        self.bind_detection(has_swayidle, has_locker);
     }
     
     /// Load idle configuration into the page
@@ -125,6 +142,7 @@ impl IdlePage {
 
 impl Default for IdlePage {
     fn default() -> Self {
-        Self::new()
+        use crate::model::settings::Settings;
+        Self::new(Rc::new(RefCell::new(AppState::new(Settings::default()))))
     }
 }
