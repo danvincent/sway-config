@@ -171,7 +171,12 @@ impl ThemesPage {
         };
         theme_paths.push((user_path, "user".to_string()));
         
-        // Priority 2: System themes
+        // Priority 2: Built-in themes from the SwayConfig template source
+        if let Ok(home) = std::env::var("HOME") {
+            theme_paths.push((PathBuf::from(format!("{}/source/SwayConfig/themes", home)), "built-in".to_string()));
+        }
+
+        // Priority 3: System themes
         theme_paths.push((PathBuf::from("/usr/share/themes"), "system".to_string()));
         
         for (path, source_label) in theme_paths {
@@ -180,12 +185,19 @@ impl ThemesPage {
                     for entry in entries {
                         if let Ok(entry) = entry {
                             let file_path = entry.path();
-                            if let Some(file_name) = file_path.file_name() {
-                                if let Some(name_str) = file_name.to_str() {
+                            // .env files (Sway theme format)
+                            if file_path.is_file() {
+                                if let Some(name_str) = file_path.file_name().and_then(|n| n.to_str()) {
                                     if name_str.ends_with(".env") {
                                         let theme_name = name_str.trim_end_matches(".env").to_string();
                                         themes.push(ThemeSelection::new(theme_name, source_label.clone()));
                                     }
+                                }
+                            }
+                            // GTK theme directories (containing index.theme)
+                            if file_path.is_dir() && file_path.join("index.theme").exists() {
+                                if let Some(name_str) = file_path.file_name().and_then(|n| n.to_str()) {
+                                    themes.push(ThemeSelection::new(name_str.to_string(), source_label.clone()));
                                 }
                             }
                         }
