@@ -26,3 +26,11 @@ path = "tests/model_roundtrip.rs"
 [[test]]
 name = "store_integration"
 path = "tests/store_integration.rs"
+
+[[test]]
+name = "settings_integration"
+path = "tests/settings_integration.rs"
+
+[[test]]
+name = "sway_detection"
+path = "tests/sway_detection.rs"

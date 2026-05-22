@@ -1,12 +1,20 @@
 /// Settings model - editable user configuration
 use serde::{Deserialize, Serialize};
 use crate::model::theme::ThemeSelection;
+use crate::model::output::OutputConfig;
+use crate::model::input::{KeyboardConfig, TouchpadConfig};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     /// Currently selected theme
     pub theme: Option<ThemeSelection>,
+    /// Output/display configurations
+    pub outputs: Vec<OutputConfig>,
+    /// Keyboard configurations
+    pub keyboards: Vec<KeyboardConfig>,
+    /// Touchpad configurations
+    pub touchpads: Vec<TouchpadConfig>,
 }
 
 #[cfg(test)]

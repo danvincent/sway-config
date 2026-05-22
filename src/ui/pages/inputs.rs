@@ -1,24 +1,137 @@
 /// Inputs configuration page (keyboard, mouse)
+#[cfg(feature = "gtk")]
 use gtk4::prelude::*;
+#[cfg(feature = "gtk")]
 use libadwaita::prelude::*;
 
+#[cfg(feature = "gtk")]
+use crate::model::input::{KeyboardConfig, TouchpadConfig};
+
 /// Inputs page - for configuring input devices
+#[cfg(feature = "gtk")]
 pub struct InputsPage {
     widget: gtk4::Box,
+    keyboards_list: gtk4::ListBox,
+    touchpads_list: gtk4::ListBox,
 }
 
+#[cfg(feature = "gtk")]
 impl InputsPage {
     /// Create a new inputs page
     pub fn new() -> Self {
         let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
-        let status_page = libadwaita::StatusPage::new();
-        status_page.set_title("Input Devices");
-        status_page.set_description(Some("Configure keyboard, mouse, and touchpad settings"));
+        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+        header_box.set_margin_start(12);
+        header_box.set_margin_end(12);
+        header_box.set_margin_top(12);
+        header_box.set_margin_bottom(12);
         
-        widget.append(&status_page);
+        let title = gtk4::Label::new(Some("Input Devices"));
+        title.add_css_class("title-1");
+        header_box.append(&title);
         
-        InputsPage { widget }
+        let description = gtk4::Label::new(Some("Configure keyboard, mouse, and touchpad settings"));
+        description.add_css_class("dim-label");
+        header_box.append(&description);
+        
+        widget.append(&header_box);
+        
+        let scrolled = gtk4::ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        
+        let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        main_box.set_margin_start(12);
+        main_box.set_margin_end(12);
+        main_box.set_margin_top(12);
+        main_box.set_margin_bottom(12);
+        
+        // Keyboards section
+        let keyboards_title = gtk4::Label::new(Some("Keyboards"));
+        keyboards_title.add_css_class("heading");
+        keyboards_title.set_halign(gtk4::Align::Start);
+        main_box.append(&keyboards_title);
+        
+        let keyboards_list = gtk4::ListBox::new();
+        keyboards_list.set_selection_mode(gtk4::SelectionMode::None);
+        main_box.append(&keyboards_list);
+        
+        // Touchpads section
+        let touchpads_title = gtk4::Label::new(Some("Touchpads"));
+        touchpads_title.add_css_class("heading");
+        touchpads_title.set_halign(gtk4::Align::Start);
+        main_box.append(&touchpads_title);
+        
+        let touchpads_list = gtk4::ListBox::new();
+        touchpads_list.set_selection_mode(gtk4::SelectionMode::None);
+        main_box.append(&touchpads_list);
+        
+        scrolled.set_child(Some(&main_box));
+        widget.append(&scrolled);
+        
+        InputsPage { widget, keyboards_list, touchpads_list }
+    }
+
+    /// Load keyboards into the list
+    pub fn load_keyboards(&self, keyboards: &[KeyboardConfig]) {
+        // Clear existing items
+        while let Some(child) = self.keyboards_list.first_child() {
+            self.keyboards_list.remove(&child);
+        }
+        
+        // Add new items
+        for keyboard in keyboards {
+            let row = gtk4::ListBoxRow::new();
+            let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+            box_widget.set_margin_start(12);
+            box_widget.set_margin_end(12);
+            box_widget.set_margin_top(6);
+            box_widget.set_margin_bottom(6);
+            
+            let name_label = gtk4::Label::new(Some(&keyboard.identifier));
+            name_label.set_halign(gtk4::Align::Start);
+            name_label.add_css_class("heading");
+            box_widget.append(&name_label);
+            
+            let layout_label = gtk4::Label::new(Some(&format!("Layout: {}", keyboard.xkb_layout)));
+            layout_label.set_halign(gtk4::Align::Start);
+            layout_label.add_css_class("dim-label");
+            box_widget.append(&layout_label);
+            
+            row.set_child(Some(&box_widget));
+            self.keyboards_list.append(&row);
+        }
+    }
+
+    /// Load touchpads into the list
+    pub fn load_touchpads(&self, touchpads: &[TouchpadConfig]) {
+        // Clear existing items
+        while let Some(child) = self.touchpads_list.first_child() {
+            self.touchpads_list.remove(&child);
+        }
+        
+        // Add new items
+        for touchpad in touchpads {
+            let row = gtk4::ListBoxRow::new();
+            let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+            box_widget.set_margin_start(12);
+            box_widget.set_margin_end(12);
+            box_widget.set_margin_top(6);
+            box_widget.set_margin_bottom(6);
+            
+            let name_label = gtk4::Label::new(Some(&touchpad.identifier));
+            name_label.set_halign(gtk4::Align::Start);
+            name_label.add_css_class("heading");
+            box_widget.append(&name_label);
+            
+            let tap_label = gtk4::Label::new(Some(if touchpad.tap_to_click { "Tap enabled" } else { "Tap disabled" }));
+            tap_label.set_halign(gtk4::Align::Start);
+            tap_label.add_css_class("dim-label");
+            box_widget.append(&tap_label);
+            
+            row.set_child(Some(&box_widget));
+            self.touchpads_list.append(&row);
+        }
     }
 
     /// Get a reference to the page's widget
@@ -27,8 +140,12 @@ impl InputsPage {
     }
 }
 
+#[cfg(feature = "gtk")]
 impl Default for InputsPage {
     fn default() -> Self {
         Self::new()
     }
 }
+
+#[cfg(not(feature = "gtk"))]
+pub struct InputsPage;
