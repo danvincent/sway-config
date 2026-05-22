@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use crate::model::theme::ThemeSelection;
 use crate::model::output::OutputConfig;
 use crate::model::input::{KeyboardConfig, TouchpadConfig};
+use crate::model::idle::IdleConfig;
+use crate::model::waybar::WaybarConfig;
+use crate::model::autostart::AutostartConfig;
+use crate::model::notifications::NotificationsConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -15,6 +19,18 @@ pub struct Settings {
     pub keyboards: Vec<KeyboardConfig>,
     /// Touchpad configurations
     pub touchpads: Vec<TouchpadConfig>,
+    /// Idle behavior configuration
+    #[serde(default)]
+    pub idle: IdleConfig,
+    /// Waybar configuration
+    #[serde(default)]
+    pub waybar: WaybarConfig,
+    /// Autostart entries
+    #[serde(default)]
+    pub autostart: AutostartConfig,
+    /// Notifications configuration
+    #[serde(default)]
+    pub notifications: NotificationsConfig,
 }
 
 #[cfg(test)]
