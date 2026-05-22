@@ -58,7 +58,7 @@ impl OutputPaths {
             outputs_conf: base.join("sway/config.d/outputs.conf"),
             inputs_conf: base.join("sway/config.d/inputs.conf"),
             idle_conf: base.join("sway/config.d/idle.conf"),
-            waybar_config: base.join("waybar/config.json"),
+            waybar_config: base.join("waybar/config.jsonc"),
             waybar_style: base.join("waybar/style.css"),
             autostart_conf: base.join("sway/config.d/autostart.conf"),
         }
@@ -175,19 +175,24 @@ fn reload_sway() -> bool {
     }
 }
 
-/// Restart waybar with HUP signal
+/// Restart waybar — send SIGUSR2 to reload config in place (waybar 0.9+).
+/// Falls back to kill + relaunch if no process is found.
 fn restart_waybar() -> bool {
     use std::process::Command;
 
-    let output = Command::new("pkill")
-        .arg("-HUP")
-        .arg("waybar")
-        .output();
+    // Try SIGUSR2 first (causes waybar to reload config without flicker)
+    let running = Command::new("killall")
+        .args(["-SIGUSR2", "waybar"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
 
-    match output {
-        Ok(out) => out.status.success(),
-        Err(_) => false,
+    if running {
+        return true;
     }
+
+    // Not running — launch it fresh
+    Command::new("waybar").spawn().is_ok()
 }
 
 #[cfg(test)]

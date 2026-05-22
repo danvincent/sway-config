@@ -637,13 +637,13 @@ fn test_apply_writes_empty_waybar_config_json_when_disabled() {
     let result = apply(&settings, config, tempdir.path());
     assert!(result.success);
     
-    // config.json should exist even when waybar is disabled
-    let waybar_config_path = tempdir.path().join("waybar/config.json");
-    assert!(waybar_config_path.exists(), "config.json should exist even when waybar is disabled");
+    // config.jsonc should exist even when waybar is disabled
+    let waybar_config_path = tempdir.path().join("waybar/config.jsonc");
+    assert!(waybar_config_path.exists(), "config.jsonc should exist even when waybar is disabled");
     
-    let content = fs::read_to_string(&waybar_config_path).expect("Failed to read config.json");
+    let content = fs::read_to_string(&waybar_config_path).expect("Failed to read config.jsonc");
     // Should contain empty JSON object
-    assert_eq!(content.trim(), "{}", "config.json should be empty JSON object when waybar is disabled");
+    assert_eq!(content.trim(), "{}", "config.jsonc should be empty JSON object when waybar is disabled");
 }
 
 #[test]
@@ -680,7 +680,7 @@ fn test_apply_clears_stale_files() {
     
     let idle_conf_path = tempdir.path().join("sway/config.d/idle.conf");
     let autostart_conf_path = tempdir.path().join("sway/config.d/autostart.conf");
-    let waybar_config_path = tempdir.path().join("waybar/config.json");
+    let waybar_config_path = tempdir.path().join("waybar/config.jsonc");
     
     assert!(idle_conf_path.exists());
     assert!(autostart_conf_path.exists());
@@ -707,7 +707,7 @@ fn test_apply_clears_stale_files() {
     let autostart_content_after = fs::read_to_string(&autostart_conf_path).expect("Failed to read autostart.conf");
     assert!(autostart_content_after.is_empty() || autostart_content_after.trim().is_empty(), "autostart.conf should be empty after disabling");
     
-    assert!(waybar_config_path.exists(), "config.json should still exist");
-    let waybar_content_after = fs::read_to_string(&waybar_config_path).expect("Failed to read config.json");
-    assert_eq!(waybar_content_after.trim(), "{}", "config.json should be empty JSON object after disabling");
+    assert!(waybar_config_path.exists(), "config.jsonc should still exist");
+    let waybar_content_after = fs::read_to_string(&waybar_config_path).expect("Failed to read config.jsonc");
+    assert_eq!(waybar_content_after.trim(), "{}", "config.jsonc should be empty JSON object after disabling");
 }
