@@ -1,0 +1,22 @@
+[package]
+name = "sway-configurator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[[test]]
+name = "model_roundtrip"
+path = "tests/model_roundtrip.rs"
+
+[[test]]
+name = "store_integration"
+path = "tests/store_integration.rs"
