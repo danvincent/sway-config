@@ -56,7 +56,7 @@ jobs:
         run: cargo deb --no-build
 
       - name: Build RPM package
-        run: cargo generate-rpm --auto-req
+        run: cargo generate-rpm
 
       - name: Prepare Arch package sources
         run: |
