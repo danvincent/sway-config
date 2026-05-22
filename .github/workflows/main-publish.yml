@@ -44,7 +44,7 @@ jobs:
       - name: Test (GTK UI)
         env:
           GDK_BACKEND: x11
-        run: xvfb-run -a cargo test --locked --features gtk --test gtk_ui_integration
+        run: xvfb-run -a cargo test --locked --features gtk --test gtk_ui_integration -- --test-threads=1
 
       - name: Build release binary
         run: cargo build --release --locked
