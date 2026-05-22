@@ -33,6 +33,7 @@ priority = "optional"
 assets = [
   ["target/release/sway-config", "usr/bin/", "755"],
   ["packaging/sway-config.desktop", "usr/share/applications/", "644"],
+  ["packaging/sway-config.svg", "usr/share/icons/hicolor/scalable/apps/sway-config.svg", "644"],
   ["README.md", "usr/share/doc/sway-config/README.md", "644"],
   ["LICENSE", "usr/share/doc/sway-config/LICENSE", "644"],
 ]
