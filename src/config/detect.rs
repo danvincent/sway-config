@@ -53,6 +53,10 @@ pub struct SwayInput {
     /// The first symbol corresponds to the current active layout.
     #[serde(default)]
     pub xkb_layouts_as_symbols: Vec<String>,
+    #[serde(default)]
+    pub repeat_delay: Option<i32>,
+    #[serde(default)]
+    pub repeat_rate: Option<i32>,
     pub libinput: Option<LibinputConfig>,
 }
 
@@ -121,11 +125,68 @@ pub fn detect_touchpads(inputs: &[SwayInput]) -> Vec<&SwayInput> {
         .collect()
 }
 
+/// Read keyboard xkb defaults from the main sway config file.
+///
+/// Parses `~/.config/sway/config` for `input "type:keyboard" { ... }` or
+/// `input * { ... }` blocks and extracts xkb_layout, xkb_variant, xkb_options.
+/// Returns `(layout, variant, options)` — all default to empty string if not found.
+pub fn sway_config_keyboard_defaults() -> (String, String, String) {
+    sway_config_keyboard_defaults_from_path(
+        &format!("{}/.config/sway/config", std::env::var("HOME").unwrap_or_default())
+    )
+}
+
+pub fn sway_config_keyboard_defaults_from_path(path: &str) -> (String, String, String) {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return (String::new(), String::new(), String::new()),
+    };
+
+    let mut layout = String::new();
+    let mut variant = String::new();
+    let mut options = String::new();
+    let mut in_keyboard_block = false;
+    let mut brace_depth: i32 = 0;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if !in_keyboard_block {
+            // Match: input "type:keyboard" { or input * {
+            if (trimmed.starts_with("input \"type:keyboard\"") || trimmed.starts_with("input *"))
+                && trimmed.contains('{')
+            {
+                in_keyboard_block = true;
+                brace_depth = 1;
+            }
+            continue;
+        }
+
+        for ch in trimmed.chars() {
+            if ch == '{' { brace_depth += 1; }
+            if ch == '}' { brace_depth -= 1; }
+        }
+        if brace_depth <= 0 {
+            in_keyboard_block = false;
+            continue;
+        }
+
+        if let Some(val) = trimmed.strip_prefix("xkb_layout ") {
+            layout = val.trim().trim_matches('"').to_string();
+        } else if let Some(val) = trimmed.strip_prefix("xkb_variant ") {
+            let v = val.trim().trim_matches('"').to_string();
+            if v != "none" { variant = v; }
+        } else if let Some(val) = trimmed.strip_prefix("xkb_options ") {
+            options = val.trim().trim_matches('"').to_string();
+        }
+    }
+
+    (layout, variant, options)
+}
+
+
+
 /// Read the system keyboard layout from /etc/default/keyboard.
 /// Returns `(layout, variant)` — layout defaults to "us", variant to "".
-/// Used as the fallback when a keyboard device's `xkb_layouts_as_symbols` list is
-/// empty (e.g. when running outside a Sway session or on hardware that doesn't
-/// report XKB symbol info via swaymsg).
 pub fn system_keyboard_layout() -> (String, String) {
     system_keyboard_layout_from_path("/etc/default/keyboard")
 }

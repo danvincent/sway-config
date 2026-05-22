@@ -118,27 +118,19 @@ impl RenderModel {
 
         // Render keyboards
         for keyboard in &settings.keyboards {
-            let sway_directive = format!(
-                "input \"{}\" {{\n    xkb_layout {}\n    xkb_variant {}\n    xkb_options {}\n    repeat_delay {}\n    repeat_rate {}\n}}",
-                keyboard.identifier,
-                if keyboard.xkb_layout.is_empty() {
-                    "us".to_string()
-                } else {
-                    keyboard.xkb_layout.clone()
-                },
-                if keyboard.xkb_variant.is_empty() {
-                    "\"\"".to_string()
-                } else {
-                    format!("\"{}\"", keyboard.xkb_variant)
-                },
-                if keyboard.xkb_options.is_empty() {
-                    "\"\"".to_string()
-                } else {
-                    format!("\"{}\"", keyboard.xkb_options)
-                },
-                keyboard.repeat_delay,
-                keyboard.repeat_rate
-            );
+            let layout = if keyboard.xkb_layout.is_empty() { "us" } else { &keyboard.xkb_layout };
+            let mut lines = vec![format!("input \"{}\" {{", keyboard.identifier)];
+            lines.push(format!("    xkb_layout {}", layout));
+            if !keyboard.xkb_variant.is_empty() {
+                lines.push(format!("    xkb_variant \"{}\"", keyboard.xkb_variant));
+            }
+            if !keyboard.xkb_options.is_empty() {
+                lines.push(format!("    xkb_options \"{}\"", keyboard.xkb_options));
+            }
+            lines.push(format!("    repeat_delay {}", keyboard.repeat_delay));
+            lines.push(format!("    repeat_rate {}", keyboard.repeat_rate));
+            lines.push("}".to_string());
+            let sway_directive = lines.join("\n");
 
             inputs.push(RenderedInput {
                 sway_directive,

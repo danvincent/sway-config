@@ -130,6 +130,8 @@ fn test_detect_keyboards_filters_correctly() {
         xkb_active_layout_name: Some("us".to_string()),
         xkb_layouts_as_symbols: vec!["us".to_string()],
         libinput: None,
+        repeat_delay: None,
+        repeat_rate: None,
     };
     
     let touchpad_input = SwayInput {
@@ -140,6 +142,8 @@ fn test_detect_keyboards_filters_correctly() {
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
+            repeat_delay: None,
+            repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -170,6 +174,8 @@ fn test_detect_touchpads_filters_correctly() {
         xkb_active_layout_name: Some("us".to_string()),
         xkb_layouts_as_symbols: vec!["us".to_string()],
         libinput: None,
+        repeat_delay: None,
+        repeat_rate: None,
     };
     
     let touchpad_input = SwayInput {
@@ -180,6 +186,8 @@ fn test_detect_touchpads_filters_correctly() {
         type_: "touchpad".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
+            repeat_delay: None,
+            repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -209,6 +217,8 @@ fn test_detect_touchpads_by_name() {
         type_: "other".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
+            repeat_delay: None,
+            repeat_rate: None,
         libinput: Some(LibinputConfig {
             send_events: None,
             tap: None,
@@ -260,12 +270,12 @@ fn test_keyboard_config_from_sway() {
     
     let config = KeyboardConfig::from_sway(&sway_input);
 
-    // Layout comes from xkb_layouts_as_symbols[0] ("gb"); variant from system /etc/default/keyboard.
-    let (_sys_layout, sys_variant) = sway_configurator::config::detect::system_keyboard_layout();
+    // Layout and options come from the sway config file; variant is empty (not set in sway config).
+    let (sway_layout, sway_variant, sway_options) = sway_configurator::config::detect::sway_config_keyboard_defaults();
     assert_eq!(config.identifier, "1:1:AT_Translated_Set_2_keyboard");
-    assert_eq!(config.xkb_layout, "gb"); // from xkb_layouts_as_symbols[0]
-    assert_eq!(config.xkb_variant, sys_variant);   // from /etc/default/keyboard
-    assert_eq!(config.xkb_options, "");
+    assert_eq!(config.xkb_layout, if !sway_layout.is_empty() { sway_layout } else { "gb".to_string() });
+    assert_eq!(config.xkb_variant, sway_variant);
+    assert_eq!(config.xkb_options, sway_options);
     assert_eq!(config.repeat_delay, 600);
     assert_eq!(config.repeat_rate, 25);
 }
@@ -324,18 +334,20 @@ fn test_keyboard_config_defaults() {
         type_: "keyboard".to_string(),
         xkb_active_layout_name: None,
         xkb_layouts_as_symbols: vec![],
+        repeat_delay: None,
+        repeat_rate: None,
         libinput: None,
     };
     
     let config = KeyboardConfig::from_sway(&sway_input);
 
-    // When xkb_active_layout_name is None, the layout is inherited from
-    // /etc/default/keyboard (XKBLAYOUT) or defaults to "us".
-    let (expected_layout, expected_variant) =
+    // Layout comes from sway config or /etc/default/keyboard fallback.
+    let (expected_layout, _) =
         sway_configurator::config::detect::system_keyboard_layout();
-    assert_eq!(config.xkb_layout, expected_layout);
-    assert_eq!(config.xkb_variant, expected_variant);
-    assert_eq!(config.xkb_options, "");
+    let (sway_layout, _, _) =
+        sway_configurator::config::detect::sway_config_keyboard_defaults();
+    let expected = if !sway_layout.is_empty() { sway_layout } else { expected_layout };
+    assert_eq!(config.xkb_layout, expected);
     assert_eq!(config.repeat_delay, 600);
     assert_eq!(config.repeat_rate, 25);
 }

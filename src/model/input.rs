@@ -61,30 +61,31 @@ fn default_repeat_rate() -> i32 {
 
 impl KeyboardConfig {
     /// Create KeyboardConfig from a detected Sway input (keyboard type).
-    /// The xkb_layout is populated from:
-    ///   1. `xkb_layouts_as_symbols[0]` from swaymsg — the XKB symbol (e.g. "gb", "us")
-    ///      that corresponds to the active layout; this is what sway config expects.
-    ///   2. `/etc/default/keyboard` (XKBLAYOUT= line) as fallback when swaymsg doesn't
-    ///      provide symbols (e.g. when running outside a Sway session).
-    ///   3. "us" if neither source is available.
+    /// XKB settings are read from the main sway config (`~/.config/sway/config`)
+    /// so that the app inherits what's already working, including xkb_options.
+    /// Falls back to `/etc/default/keyboard` for the layout symbol only.
     pub fn from_sway(input: &crate::config::detect::SwayInput) -> Self {
-        let (sys_layout, sys_variant) =
-            crate::config::detect::system_keyboard_layout();
+        let (cfg_layout, cfg_variant, cfg_options) =
+            crate::config::detect::sway_config_keyboard_defaults();
 
-        let xkb_layout = input
-            .xkb_layouts_as_symbols
-            .first()
-            .filter(|s| !s.is_empty())
-            .cloned()
-            .unwrap_or(sys_layout);
+        let xkb_layout = if !cfg_layout.is_empty() {
+            cfg_layout
+        } else {
+            let (sys_layout, _) = crate::config::detect::system_keyboard_layout();
+            sys_layout
+        };
+
+        // Read repeat settings from live sway input if available
+        let repeat_delay = input.repeat_delay.unwrap_or(600);
+        let repeat_rate = input.repeat_rate.unwrap_or(25);
 
         KeyboardConfig {
             identifier: input.identifier.clone(),
             xkb_layout,
-            xkb_variant: sys_variant,
-            xkb_options: String::new(),
-            repeat_delay: 600,
-            repeat_rate: 25,
+            xkb_variant: cfg_variant,
+            xkb_options: cfg_options,
+            repeat_delay,
+            repeat_rate,
         }
     }
 }
