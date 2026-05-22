@@ -447,9 +447,21 @@ pub fn apply_theme(
         }
     }
 
-    // Write qt5ct/qt6ct settings so Qt apps can follow icon/font theme.
-    let qt_settings = build_qtct_settings(&vars);
+    // Write qt5ct/qt6ct settings so Qt apps can follow icon/font and colors.
+    let qt_colors = build_qtct_color_scheme(&vars);
     for dir in &["qt5ct", "qt6ct"] {
+        let colors_path = base_path.join(format!("{}/colors/sway-config.conf", dir));
+        match write_file(&colors_path, &qt_colors) {
+            Ok(_) => result
+                .files_written
+                .push(colors_path.to_string_lossy().into()),
+            Err(e) => result.errors.push(format!(
+                "Failed to write {}/colors/sway-config.conf: {}",
+                dir, e
+            )),
+        }
+
+        let qt_settings = build_qtct_settings(&vars, &colors_path);
         let qt_path = base_path.join(format!("{}/{}.conf", dir, dir));
         match write_file(&qt_path, &qt_settings) {
             Ok(_) => result.files_written.push(qt_path.to_string_lossy().into()),
@@ -575,7 +587,10 @@ fn build_gtk_settings(vars: &std::collections::HashMap<String, String>) -> Strin
 }
 
 /// Build qt5ct/qt6ct config from theme variables.
-fn build_qtct_settings(vars: &std::collections::HashMap<String, String>) -> String {
+fn build_qtct_settings(
+    vars: &std::collections::HashMap<String, String>,
+    color_scheme_path: &Path,
+) -> String {
     let icons = vars
         .get("ICON_THEME")
         .map(|s| s.as_str())
@@ -589,6 +604,8 @@ fn build_qtct_settings(vars: &std::collections::HashMap<String, String>) -> Stri
 
     format!(
         "[Appearance]\n\
+         color_scheme_path={color_scheme_path}\n\
+         custom_palette=true\n\
          icon_theme={icons}\n\
          standard_dialogs=default\n\
          style=Fusion\n\
@@ -596,10 +613,110 @@ fn build_qtct_settings(vars: &std::collections::HashMap<String, String>) -> Stri
          [Fonts]\n\
          general={qt_font}\n\
          fixed=\"monospace,{size},-1,5,50,0,0,0,0,0\"\n",
+        color_scheme_path = color_scheme_path.to_string_lossy(),
         icons = icons,
         qt_font = qt_font,
         size = size,
     )
+}
+
+/// Build a qt5ct/qt6ct color scheme file.
+fn build_qtct_color_scheme(vars: &std::collections::HashMap<String, String>) -> String {
+    let active = build_qt_color_set(vars, "active");
+    let disabled = build_qt_color_set(vars, "disabled");
+    let inactive = build_qt_color_set(vars, "inactive");
+    format!(
+        "[ColorScheme]\nactive_colors={active}\ndisabled_colors={disabled}\ninactive_colors={inactive}\n",
+        active = active.join(", "),
+        disabled = disabled.join(", "),
+        inactive = inactive.join(", "),
+    )
+}
+
+fn build_qt_color_set(
+    vars: &std::collections::HashMap<String, String>,
+    state: &str,
+) -> Vec<String> {
+    let map = |k: &str, fallback: &str| {
+        vars.get(k)
+            .cloned()
+            .unwrap_or_else(|| fallback.to_string())
+    };
+    let (window, button, text, highlight, link, visited, placeholder) = match state {
+        "disabled" => (
+            map("COLOR_SURFACE1", "#44475a"),
+            map("COLOR_SURFACE0", "#3a3f4b"),
+            map("COLOR_OVERLAY0", "#8a8f98"),
+            map("COLOR_SURFACE2", "#555b68"),
+            map("COLOR_BLUE", "#7aa2f7"),
+            map("COLOR_MAUVE", "#bb9af7"),
+            map("COLOR_OVERLAY1", "#6c7086"),
+        ),
+        "inactive" => (
+            map("COLOR_BASE", "#1e1e2e"),
+            map("COLOR_SURFACE0", "#313244"),
+            map("COLOR_SUBTEXT0", "#a6adc8"),
+            map("COLOR_BLUE", "#89b4fa"),
+            map("COLOR_BLUE", "#89b4fa"),
+            map("COLOR_MAUVE", "#cba6f7"),
+            map("COLOR_OVERLAY0", "#6c7086"),
+        ),
+        _ => (
+            map("COLOR_BASE", "#1e1e2e"),
+            map("COLOR_SURFACE0", "#313244"),
+            map("COLOR_TEXT", "#cdd6f4"),
+            map("COLOR_LAVENDER", "#b4befe"),
+            map("COLOR_BLUE", "#89b4fa"),
+            map("COLOR_MAUVE", "#cba6f7"),
+            map("COLOR_OVERLAY0", "#6c7086"),
+        ),
+    };
+
+    vec![
+        qt_hex(&text),                              // WindowText
+        qt_hex(&button),                            // Button
+        qt_hex(&map("COLOR_SURFACE1", "#45475a")), // Light
+        qt_hex(&map("COLOR_SURFACE2", "#585b70")), // Midlight
+        qt_hex(&map("COLOR_MANTLE", "#181825")),   // Dark
+        qt_hex(&map("COLOR_SURFACE2", "#585b70")), // Mid
+        qt_hex(&text),                              // Text
+        qt_hex(&map("COLOR_CRUST", "#11111b")),    // BrightText
+        qt_hex(&text),                              // ButtonText
+        qt_hex(&map("COLOR_BASE", "#1e1e2e")),     // Base
+        qt_hex(&window),                            // Window
+        qt_hex(&map("COLOR_MANTLE", "#181825")),   // Shadow
+        qt_hex(&highlight),                         // Highlight
+        qt_hex(&map("COLOR_BASE", "#1e1e2e")),     // HighlightedText
+        qt_hex(&link),                              // Link
+        qt_hex(&visited),                           // LinkVisited
+        qt_hex(&map("COLOR_SURFACE0", "#313244")), // AlternateBase
+        qt_hex(&map("COLOR_SURFACE0", "#313244")), // ToolTipBase
+        qt_hex(&text),                              // ToolTipText
+        qt_hex(&placeholder),                       // PlaceholderText
+        qt_hex_alpha(&map("COLOR_LAVENDER", "#b4befe"), 0x80), // Accent
+    ]
+}
+
+fn qt_hex(color: &str) -> String {
+    let c = color.trim();
+    if c.starts_with('#') && c.len() == 7 {
+        format!("#ff{}", &c[1..])
+    } else if c.starts_with('#') && c.len() == 9 {
+        c.to_string()
+    } else {
+        "#ff000000".to_string()
+    }
+}
+
+fn qt_hex_alpha(color: &str, alpha: u8) -> String {
+    let c = color.trim();
+    if c.starts_with('#') && c.len() == 7 {
+        format!("#{alpha:02x}{}", &c[1..], alpha = alpha)
+    } else if c.starts_with('#') && c.len() == 9 {
+        format!("#{:02x}{}", alpha, &c[3..])
+    } else {
+        format!("#{:02x}000000", alpha)
+    }
 }
 
 fn command_exists(bin: &str) -> bool {
@@ -683,9 +800,10 @@ mod tests {
         vars.insert("FONT_FAMILY".to_string(), "Inter".to_string());
         vars.insert("FONT_SIZE".to_string(), "11".to_string());
 
-        let conf = build_qtct_settings(&vars);
+        let conf = build_qtct_settings(&vars, Path::new("/tmp/sway-config.conf"));
         assert!(conf.contains("icon_theme=Papirus"));
         assert!(conf.contains("general=Inter,11,-1,5,50,0,0,0,0,0"));
+        assert!(conf.contains("custom_palette=true"));
     }
 
     #[test]
@@ -693,5 +811,15 @@ mod tests {
         let envd = build_qt_envd_content("qt5ct");
         assert!(envd.contains("QT_QPA_PLATFORMTHEME=qt5ct"));
         assert!(envd.contains("QT_STYLE_OVERRIDE=Fusion"));
+    }
+
+    #[test]
+    fn test_build_qtct_color_scheme_has_three_palettes() {
+        let vars = std::collections::HashMap::new();
+        let conf = build_qtct_color_scheme(&vars);
+        assert!(conf.contains("[ColorScheme]"));
+        assert!(conf.contains("active_colors="));
+        assert!(conf.contains("disabled_colors="));
+        assert!(conf.contains("inactive_colors="));
     }
 }
