@@ -1,5 +1,4 @@
 /// Pages module - UI pages for different configuration sections
-#[cfg(feature = "gtk")]
 pub mod outputs;
 #[cfg(feature = "gtk")]
 pub mod inputs;

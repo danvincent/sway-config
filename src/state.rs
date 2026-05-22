@@ -82,6 +82,13 @@ impl AppState {
         !self.touchpads_dirty
     }
 
+    /// Mark outputs as dirty from an individual-field update.
+    /// Use this when updating a single output field via settings_mut() instead of set_outputs().
+    pub fn mark_outputs_dirty(&mut self) {
+        self.dirty = true;
+        self.outputs_dirty = true;
+    }
+
     /// Get a reference to the current settings
     pub fn settings(&self) -> &Settings {
         &self.settings
@@ -376,5 +383,46 @@ mod tests {
         assert!(!state.is_outputs_dirty());
         assert!(!state.is_keyboards_dirty());
         assert!(!state.is_touchpads_dirty());
+    }
+
+    #[test]
+    fn test_mark_outputs_dirty_sets_both_global_and_section() {
+        let mut state = AppState::new(Settings::default());
+        assert!(!state.is_dirty());
+        assert!(!state.is_outputs_dirty());
+
+        state.mark_outputs_dirty();
+
+        assert!(state.is_dirty(), "global dirty must be set");
+        assert!(state.is_outputs_dirty(), "outputs section dirty must be set");
+        assert!(!state.is_keyboards_dirty(), "keyboards must be unaffected");
+        assert!(!state.is_touchpads_dirty(), "touchpads must be unaffected");
+    }
+
+    #[test]
+    fn test_individual_output_field_update_via_settings_mut() {
+        // Simulates what the ExpanderRow signal closures do: update a single field
+        // through settings_mut() then call mark_outputs_dirty().
+        let mut state = AppState::new(Settings::default());
+        state.set_outputs(vec![OutputConfig {
+            name: "HDMI-1".to_string(),
+            enabled: true,
+            resolution: None,
+            refresh_rate: None,
+            position: crate::model::output::Position { x: 0, y: 0 },
+            scale: 1.0,
+            transform: crate::model::output::Transform::Normal,
+        }]);
+        state.mark_clean(); // simulate starting from a loaded state
+
+        // Now simulate a single-field update (scale)
+        if let Some(out) = state.settings_mut().outputs.get_mut(0) {
+            out.scale = 2.0;
+        }
+        state.mark_outputs_dirty();
+
+        assert!(state.is_dirty());
+        assert!(state.is_outputs_dirty());
+        assert_eq!(state.settings().outputs[0].scale, 2.0);
     }
 }

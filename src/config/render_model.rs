@@ -81,7 +81,13 @@ impl RenderModel {
                     let resolution_part = if resolution_str.is_empty() {
                         String::new()
                     } else {
-                        format!("resolution {} ", resolution_str)
+                        // Include refresh rate when set (sway format: WxH@Ratemhz)
+                        let rate_suffix = output
+                            .refresh_rate
+                            .filter(|&r| r > 0)
+                            .map(|r| format!("@{}", r))
+                            .unwrap_or_default();
+                        format!("resolution {}{} ", resolution_str, rate_suffix)
                     };
 
                     let transform_str = output.transform.to_sway_str();
@@ -367,6 +373,73 @@ mod tests {
             serde_json::from_str(&json).expect("Failed to deserialize");
 
         assert_eq!(model, deserialized);
+    }
+
+    #[test]
+    fn test_render_output_includes_refresh_rate() {
+        use crate::model::output::{OutputConfig, Position, Resolution, Transform};
+        let mut settings = Settings::default();
+        settings.outputs = vec![OutputConfig {
+            name: "HDMI-1".to_string(),
+            enabled: true,
+            resolution: Some(Resolution { width: 1920, height: 1080 }),
+            refresh_rate: Some(144000),
+            position: Position { x: 0, y: 0 },
+            scale: 1.0,
+            transform: Transform::Normal,
+        }];
+        let model = RenderModel::from_settings(&settings);
+        let directive = &model.outputs[0].sway_directive;
+        assert!(
+            directive.contains("1920x1080@144000"),
+            "refresh rate must appear in directive, got: {directive}"
+        );
+    }
+
+    #[test]
+    fn test_render_different_refresh_rates_produce_different_directives() {
+        use crate::model::output::{OutputConfig, Position, Resolution, Transform};
+
+        let make_settings = |refresh: i32| {
+            let mut settings = Settings::default();
+            settings.outputs = vec![OutputConfig {
+                name: "DP-1".to_string(),
+                enabled: true,
+                resolution: Some(Resolution { width: 2560, height: 1440 }),
+                refresh_rate: Some(refresh),
+                position: Position { x: 0, y: 0 },
+                scale: 1.0,
+                transform: Transform::Normal,
+            }];
+            RenderModel::from_settings(&settings).outputs[0].sway_directive.clone()
+        };
+
+        let d60 = make_settings(60000);
+        let d144 = make_settings(144000);
+        assert_ne!(d60, d144, "60Hz and 144Hz must produce different directives");
+        assert!(d60.contains("@60000"), "60Hz directive: {d60}");
+        assert!(d144.contains("@144000"), "144Hz directive: {d144}");
+    }
+
+    #[test]
+    fn test_render_output_no_refresh_rate_omits_at_sign() {
+        use crate::model::output::{OutputConfig, Position, Resolution, Transform};
+        let mut settings = Settings::default();
+        settings.outputs = vec![OutputConfig {
+            name: "eDP-1".to_string(),
+            enabled: true,
+            resolution: Some(Resolution { width: 1920, height: 1080 }),
+            refresh_rate: None,
+            position: Position { x: 0, y: 0 },
+            scale: 1.0,
+            transform: Transform::Normal,
+        }];
+        let model = RenderModel::from_settings(&settings);
+        let directive = &model.outputs[0].sway_directive;
+        assert!(
+            !directive.contains('@'),
+            "no refresh rate → no '@' in directive, got: {directive}"
+        );
     }
 }
 

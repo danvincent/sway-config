@@ -282,3 +282,96 @@ fn test_general_page_reads_terminal_from_settings() {
     let config = read_general(&settings);
     assert_eq!(config.terminal, "alacritty");
 }
+
+// ============ Phase 3: Outputs page helper tests ============
+// These test the pure (no-GTK) helper functions used by the outputs ExpanderRow UI.
+
+#[test]
+fn test_format_mode_60hz() {
+    use sway_configurator::ui::pages::outputs::format_mode;
+    assert_eq!(format_mode(1920, 1080, 60000), "1920×1080 @ 60Hz");
+}
+
+#[test]
+fn test_format_mode_144hz() {
+    use sway_configurator::ui::pages::outputs::format_mode;
+    assert_eq!(format_mode(2560, 1440, 144000), "2560×1440 @ 144Hz");
+}
+
+#[test]
+fn test_transform_labels_all_distinct() {
+    use sway_configurator::ui::pages::outputs::{TRANSFORMS, transform_label};
+    let labels: Vec<&str> = TRANSFORMS.iter().map(|t| transform_label(*t)).collect();
+    let mut unique = labels.clone();
+    unique.dedup();
+    assert_eq!(labels.len(), unique.len(), "all transform labels must be unique");
+}
+
+#[test]
+fn test_transform_index_roundtrip() {
+    use sway_configurator::ui::pages::outputs::{TRANSFORMS, transform_index, transform_from_index};
+    for &t in TRANSFORMS {
+        let idx = transform_index(t);
+        assert_eq!(transform_from_index(idx), t, "roundtrip failed for {:?}", t);
+    }
+}
+
+#[test]
+fn test_transform_label_normal() {
+    use sway_configurator::ui::pages::outputs::transform_label;
+    use sway_configurator::model::output::Transform;
+    assert_eq!(transform_label(Transform::Normal), "Normal");
+    assert_eq!(transform_label(Transform::Rotate90), "90°");
+    assert_eq!(transform_label(Transform::Flipped), "Flipped");
+}
+
+#[test]
+fn test_outputs_config_field_update_marks_dirty() {
+    use sway_configurator::model::output::{Position, Transform};
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![OutputConfig {
+        name: "DP-1".to_string(),
+        enabled: true,
+        resolution: None,
+        refresh_rate: None,
+        position: Position { x: 0, y: 0 },
+        scale: 1.0,
+        transform: Transform::Normal,
+    }]);
+    state.mark_clean();
+
+    // Simulate what the transform ComboRow closure does
+    if let Some(out) = state.settings_mut().outputs.get_mut(0) {
+        out.transform = Transform::Rotate90;
+    }
+    state.mark_outputs_dirty();
+
+    assert!(state.is_dirty());
+    assert!(state.is_outputs_dirty());
+    assert_eq!(state.settings().outputs[0].transform, Transform::Rotate90);
+}
+
+#[test]
+fn test_outputs_config_position_update() {
+    use sway_configurator::model::output::{Position, Transform};
+    let mut state = AppState::new(Settings::default());
+    state.set_outputs(vec![OutputConfig {
+        name: "HDMI-1".to_string(),
+        enabled: true,
+        resolution: None,
+        refresh_rate: None,
+        position: Position { x: 0, y: 0 },
+        scale: 1.0,
+        transform: Transform::Normal,
+    }]);
+    state.mark_clean();
+
+    if let Some(out) = state.settings_mut().outputs.get_mut(0) {
+        out.position.x = 1920;
+        out.position.y = 0;
+    }
+    state.mark_outputs_dirty();
+
+    assert_eq!(state.settings().outputs[0].position.x, 1920);
+    assert!(state.is_outputs_dirty());
+}
