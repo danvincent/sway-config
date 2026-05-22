@@ -412,7 +412,7 @@ fn test_apply_writes_outputs_conf() {
     assert!(result.success);
     
     // Check file was written
-    let outputs_conf_path = tempdir.path().join("sway/conf.d/outputs.conf");
+    let outputs_conf_path = tempdir.path().join("sway/config.d/outputs.conf");
     assert!(outputs_conf_path.exists());
     
     let content = fs::read_to_string(&outputs_conf_path).expect("Failed to read outputs.conf");
@@ -446,7 +446,7 @@ fn test_apply_writes_inputs_conf() {
     let result = apply(&settings, config, tempdir.path());
     assert!(result.success);
     
-    let inputs_conf_path = tempdir.path().join("sway/conf.d/inputs.conf");
+    let inputs_conf_path = tempdir.path().join("sway/config.d/inputs.conf");
     assert!(inputs_conf_path.exists());
     
     let content = fs::read_to_string(&inputs_conf_path).expect("Failed to read inputs.conf");
@@ -478,7 +478,7 @@ fn test_apply_writes_idle_conf() {
     let result = apply(&settings, config, tempdir.path());
     assert!(result.success);
     
-    let idle_conf_path = tempdir.path().join("sway/conf.d/idle.conf");
+    let idle_conf_path = tempdir.path().join("sway/config.d/idle.conf");
     assert!(idle_conf_path.exists());
     
     let content = fs::read_to_string(&idle_conf_path).expect("Failed to read idle.conf");
@@ -513,7 +513,7 @@ fn test_apply_creates_parent_dirs() {
     assert!(result.success);
     
     // Parent directories should be created
-    let conf_d_path = tempdir.path().join("sway/conf.d");
+    let conf_d_path = tempdir.path().join("sway/config.d");
     assert!(conf_d_path.exists());
     assert!(conf_d_path.is_dir());
 }
@@ -566,7 +566,7 @@ fn test_apply_writes_empty_idle_conf_when_disabled() {
     assert!(result.success);
     
     // idle.conf should exist even when idle is disabled
-    let idle_conf_path = tempdir.path().join("sway/conf.d/idle.conf");
+    let idle_conf_path = tempdir.path().join("sway/config.d/idle.conf");
     assert!(idle_conf_path.exists(), "idle.conf should exist even when disabled");
     
     let content = fs::read_to_string(&idle_conf_path).expect("Failed to read idle.conf");
@@ -605,7 +605,7 @@ fn test_apply_writes_empty_autostart_conf_when_all_disabled() {
     assert!(result.success);
     
     // autostart.conf should exist even when all entries are disabled
-    let autostart_conf_path = tempdir.path().join("sway/conf.d/autostart.conf");
+    let autostart_conf_path = tempdir.path().join("sway/config.d/autostart.conf");
     assert!(autostart_conf_path.exists(), "autostart.conf should exist even when all entries are disabled");
     
     let content = fs::read_to_string(&autostart_conf_path).expect("Failed to read autostart.conf");
@@ -678,8 +678,8 @@ fn test_apply_clears_stale_files() {
     let result = apply(&settings, config, tempdir.path());
     assert!(result.success);
     
-    let idle_conf_path = tempdir.path().join("sway/conf.d/idle.conf");
-    let autostart_conf_path = tempdir.path().join("sway/conf.d/autostart.conf");
+    let idle_conf_path = tempdir.path().join("sway/config.d/idle.conf");
+    let autostart_conf_path = tempdir.path().join("sway/config.d/autostart.conf");
     let waybar_config_path = tempdir.path().join("waybar/config.json");
     
     assert!(idle_conf_path.exists());

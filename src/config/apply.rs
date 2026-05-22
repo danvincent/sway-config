@@ -55,12 +55,12 @@ struct OutputPaths {
 impl OutputPaths {
     fn new(base: &Path) -> Self {
         OutputPaths {
-            outputs_conf: base.join("sway/conf.d/outputs.conf"),
-            inputs_conf: base.join("sway/conf.d/inputs.conf"),
-            idle_conf: base.join("sway/conf.d/idle.conf"),
+            outputs_conf: base.join("sway/config.d/outputs.conf"),
+            inputs_conf: base.join("sway/config.d/inputs.conf"),
+            idle_conf: base.join("sway/config.d/idle.conf"),
             waybar_config: base.join("waybar/config.json"),
             waybar_style: base.join("waybar/style.css"),
-            autostart_conf: base.join("sway/conf.d/autostart.conf"),
+            autostart_conf: base.join("sway/config.d/autostart.conf"),
         }
     }
 }

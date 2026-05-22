@@ -927,14 +927,14 @@ fn test_apply_in_test_mode_writes_sway_conf_files() {
 
     let tmp = std::env::temp_dir().join("sway_cfg_test_apply");
     let _ = std::fs::remove_dir_all(&tmp);
-    // Pre-create the sway/conf.d path so the apply step can write files
-    std::fs::create_dir_all(tmp.join("sway/conf.d")).unwrap();
+    // Pre-create the sway/config.d path so the apply step can write files
+    std::fs::create_dir_all(tmp.join("sway/config.d")).unwrap();
 
     let mut state = AppState::new(Settings::default());
     state.set_config_path(tmp.clone());
 
     let result = render_and_apply(&state);
-    // With sway/conf.d pre-created, files should be written (swaymsg may fail but success=true)
+    // With sway/config.d pre-created, files should be written (swaymsg may fail but success=true)
     // At minimum, verify the config_path override was respected and no panic occurred
     assert_eq!(state.config_path(), Some(tmp.as_path()));
     // Files written list should include our tmp base path prefix
