@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Sway Configurator
-Comment=Configure Sway and Waybar settings
-Exec=sway-configurator
-Terminal=false
-Categories=Settings;DesktopSettings;Utility;
-Keywords=sway;waybar;configuration;gtk;

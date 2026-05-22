@@ -1,11 +1,11 @@
-use sway_configurator::model::output::OutputConfig;
-use sway_configurator::model::settings::Settings;
-use sway_configurator::model::theme::ThemeSelection;
+use sway_config::model::output::OutputConfig;
+use sway_config::model::settings::Settings;
+use sway_config::model::theme::ThemeSelection;
 /// Smoke tests for UI components
 /// Tests state management logic (AppState, dirty tracking)
 /// Does NOT test GTK widgets directly since they require a display
-use sway_configurator::state::AppState;
-use sway_configurator::ui::pages;
+use sway_config::state::AppState;
+use sway_config::ui::pages;
 
 #[test]
 fn test_app_state_new() {
@@ -191,9 +191,9 @@ fn test_refresh_outputs_updates_settings() {
         enabled: true,
         resolution: None,
         refresh_rate: None,
-        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        position: sway_config::model::output::Position { x: 0, y: 0 },
         scale: 1.0,
-        transform: sway_configurator::model::output::Transform::Normal,
+        transform: sway_config::model::output::Transform::Normal,
     };
     state.refresh_outputs(vec![output.clone()]);
     assert_eq!(state.settings().outputs.len(), 1);
@@ -211,7 +211,7 @@ fn test_refresh_outputs_updates_settings() {
 fn test_outputs_guard_passes_when_keyboards_dirty() {
     // Editing keyboards must not suppress outputs detection.
     let mut state = AppState::new(Settings::default());
-    state.set_keyboards(vec![sway_configurator::model::input::KeyboardConfig {
+    state.set_keyboards(vec![sway_config::model::input::KeyboardConfig {
         identifier: "kbd".to_string(),
         xkb_layout: "gb".to_string(),
         xkb_variant: String::new(),
@@ -236,9 +236,9 @@ fn test_outputs_guard_blocks_when_outputs_dirty() {
         enabled: true,
         resolution: None,
         refresh_rate: None,
-        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        position: sway_config::model::output::Position { x: 0, y: 0 },
         scale: 1.0,
-        transform: sway_configurator::model::output::Transform::Normal,
+        transform: sway_config::model::output::Transform::Normal,
     }]);
     assert!(
         !state.should_refresh_outputs(),
@@ -250,13 +250,13 @@ fn test_outputs_guard_blocks_when_outputs_dirty() {
 fn test_keyboards_guard_passes_when_touchpads_dirty() {
     // Editing touchpads must not suppress keyboard detection.
     let mut state = AppState::new(Settings::default());
-    state.set_touchpads(vec![sway_configurator::model::input::TouchpadConfig {
+    state.set_touchpads(vec![sway_config::model::input::TouchpadConfig {
         identifier: "pad".to_string(),
         tap_to_click: true,
         natural_scroll: false,
         dwt: false,
         accel_speed: 0.0,
-        accel_profile: sway_configurator::model::input::AccelProfile::Adaptive,
+        accel_profile: sway_config::model::input::AccelProfile::Adaptive,
         left_handed: false,
         middle_emulation: false,
     }]);
@@ -270,7 +270,7 @@ fn test_keyboards_guard_passes_when_touchpads_dirty() {
 fn test_touchpads_guard_passes_when_keyboards_dirty() {
     // Editing keyboards must not suppress touchpad detection.
     let mut state = AppState::new(Settings::default());
-    state.set_keyboards(vec![sway_configurator::model::input::KeyboardConfig {
+    state.set_keyboards(vec![sway_config::model::input::KeyboardConfig {
         identifier: "kbd".to_string(),
         xkb_layout: "gb".to_string(),
         xkb_variant: String::new(),
@@ -293,9 +293,9 @@ fn test_inputs_guard_passes_when_outputs_dirty() {
         enabled: true,
         resolution: None,
         refresh_rate: None,
-        position: sway_configurator::model::output::Position { x: 0, y: 0 },
+        position: sway_config::model::output::Position { x: 0, y: 0 },
         scale: 1.0,
-        transform: sway_configurator::model::output::Transform::Normal,
+        transform: sway_config::model::output::Transform::Normal,
     }]);
     assert!(
         state.should_refresh_keyboards(),
@@ -331,7 +331,7 @@ fn test_mark_clean_restores_all_detection_guards() {
 
 #[test]
 fn test_general_page_reads_terminal_from_settings() {
-    use sway_configurator::config::read_helpers::read_general;
+    use sway_config::config::read_helpers::read_general;
 
     let mut settings = Settings::default();
     settings.general.terminal = "alacritty".to_string();
@@ -344,19 +344,19 @@ fn test_general_page_reads_terminal_from_settings() {
 
 #[test]
 fn test_format_mode_60hz() {
-    use sway_configurator::ui::pages::outputs::format_mode;
+    use sway_config::ui::pages::outputs::format_mode;
     assert_eq!(format_mode(1920, 1080, 60000), "1920×1080 @ 60Hz");
 }
 
 #[test]
 fn test_format_mode_144hz() {
-    use sway_configurator::ui::pages::outputs::format_mode;
+    use sway_config::ui::pages::outputs::format_mode;
     assert_eq!(format_mode(2560, 1440, 144000), "2560×1440 @ 144Hz");
 }
 
 #[test]
 fn test_transform_labels_all_distinct() {
-    use sway_configurator::ui::pages::outputs::{transform_label, TRANSFORMS};
+    use sway_config::ui::pages::outputs::{transform_label, TRANSFORMS};
     let labels: Vec<&str> = TRANSFORMS.iter().map(|t| transform_label(*t)).collect();
     let mut unique = labels.clone();
     unique.dedup();
@@ -369,9 +369,7 @@ fn test_transform_labels_all_distinct() {
 
 #[test]
 fn test_transform_index_roundtrip() {
-    use sway_configurator::ui::pages::outputs::{
-        transform_from_index, transform_index, TRANSFORMS,
-    };
+    use sway_config::ui::pages::outputs::{transform_from_index, transform_index, TRANSFORMS};
     for &t in TRANSFORMS {
         let idx = transform_index(t);
         assert_eq!(transform_from_index(idx), t, "roundtrip failed for {:?}", t);
@@ -380,8 +378,8 @@ fn test_transform_index_roundtrip() {
 
 #[test]
 fn test_transform_label_normal() {
-    use sway_configurator::model::output::Transform;
-    use sway_configurator::ui::pages::outputs::transform_label;
+    use sway_config::model::output::Transform;
+    use sway_config::ui::pages::outputs::transform_label;
     assert_eq!(transform_label(Transform::Normal), "Normal");
     assert_eq!(transform_label(Transform::Rotate90), "90°");
     assert_eq!(transform_label(Transform::Flipped), "Flipped");
@@ -389,7 +387,7 @@ fn test_transform_label_normal() {
 
 #[test]
 fn test_outputs_config_field_update_marks_dirty() {
-    use sway_configurator::model::output::{Position, Transform};
+    use sway_config::model::output::{Position, Transform};
     let mut state = AppState::new(Settings::default());
     state.set_outputs(vec![OutputConfig {
         name: "DP-1".to_string(),
@@ -415,7 +413,7 @@ fn test_outputs_config_field_update_marks_dirty() {
 
 #[test]
 fn test_outputs_config_position_update() {
-    use sway_configurator::model::output::{Position, Transform};
+    use sway_config::model::output::{Position, Transform};
     let mut state = AppState::new(Settings::default());
     state.set_outputs(vec![OutputConfig {
         name: "HDMI-1".to_string(),
@@ -442,7 +440,7 @@ fn test_outputs_config_position_update() {
 
 #[test]
 fn test_accel_profile_labels_distinct() {
-    use sway_configurator::ui::pages::inputs::{accel_profile_label, ACCEL_PROFILES};
+    use sway_config::ui::pages::inputs::{accel_profile_label, ACCEL_PROFILES};
     let labels: Vec<&str> = ACCEL_PROFILES
         .iter()
         .map(|&p| accel_profile_label(p))
@@ -458,7 +456,7 @@ fn test_accel_profile_labels_distinct() {
 
 #[test]
 fn test_accel_profile_index_roundtrip() {
-    use sway_configurator::ui::pages::inputs::{
+    use sway_config::ui::pages::inputs::{
         accel_profile_from_index, accel_profile_index, ACCEL_PROFILES,
     };
     for &p in &ACCEL_PROFILES {
@@ -475,7 +473,7 @@ fn test_accel_profile_index_roundtrip() {
 #[test]
 fn test_keyboard_layout_fallback_from_etc_default_keyboard() {
     use std::io::Write;
-    use sway_configurator::config::detect::system_keyboard_layout_from_path;
+    use sway_config::config::detect::system_keyboard_layout_from_path;
 
     let mut tmp = tempfile::NamedTempFile::new().unwrap();
     writeln!(tmp, "XKBLAYOUT=\"gb\"").unwrap();
@@ -488,14 +486,14 @@ fn test_keyboard_layout_fallback_from_etc_default_keyboard() {
 
 #[test]
 fn test_keyboard_layout_fallback_missing_file() {
-    use sway_configurator::config::detect::system_keyboard_layout_from_path;
+    use sway_config::config::detect::system_keyboard_layout_from_path;
     let (layout, _variant) = system_keyboard_layout_from_path("/nonexistent/path/keyboard");
     assert_eq!(layout, "us", "missing file should default to 'us'");
 }
 
 #[test]
 fn test_keyboard_xkb_override_updates_appstate() {
-    use sway_configurator::model::input::KeyboardConfig;
+    use sway_config::model::input::KeyboardConfig;
     let mut state = AppState::new(Settings::default());
     state.refresh_keyboards(vec![KeyboardConfig {
         identifier: "1:1:kb".to_string(),
@@ -521,7 +519,7 @@ fn test_keyboard_xkb_override_updates_appstate() {
 
 #[test]
 fn test_touchpad_tap_toggle_updates_appstate() {
-    use sway_configurator::model::input::{AccelProfile, TouchpadConfig};
+    use sway_config::model::input::{AccelProfile, TouchpadConfig};
     let mut state = AppState::new(Settings::default());
     state.refresh_touchpads(vec![TouchpadConfig {
         identifier: "2:7:touchpad".to_string(),
@@ -548,7 +546,7 @@ fn test_touchpad_tap_toggle_updates_appstate() {
 
 #[test]
 fn test_touchpad_accel_change_updates_appstate() {
-    use sway_configurator::model::input::{AccelProfile, TouchpadConfig};
+    use sway_config::model::input::{AccelProfile, TouchpadConfig};
     let mut state = AppState::new(Settings::default());
     state.refresh_touchpads(vec![TouchpadConfig {
         identifier: "2:7:touchpad".to_string(),
@@ -576,7 +574,7 @@ fn test_touchpad_accel_change_updates_appstate() {
 
 #[test]
 fn test_inputs_read_back_matches_loaded() {
-    use sway_configurator::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
+    use sway_config::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
     let mut state = AppState::new(Settings::default());
 
     let kb = KeyboardConfig {
@@ -642,7 +640,7 @@ fn test_idle_before_sleep_toggle_updates_appstate() {
 
 #[test]
 fn test_waybar_enabled_toggle_updates_appstate() {
-    use sway_configurator::ui::pages::waybar::bar_position_from_index;
+    use sway_config::ui::pages::waybar::bar_position_from_index;
     let mut state = AppState::new(Settings::default());
     state.settings_mut().waybar.enabled = false;
     state.mark_dirty();
@@ -650,15 +648,15 @@ fn test_waybar_enabled_toggle_updates_appstate() {
     // Ensure position round-trips
     state.settings_mut().waybar.position = bar_position_from_index(1);
     assert_eq!(
-        sway_configurator::ui::pages::waybar::bar_position_index(state.settings().waybar.position),
+        sway_config::ui::pages::waybar::bar_position_index(state.settings().waybar.position),
         1
     );
 }
 
 #[test]
 fn test_waybar_position_index_roundtrip() {
-    use sway_configurator::model::waybar::BarPosition;
-    use sway_configurator::ui::pages::waybar::{bar_position_from_index, bar_position_index};
+    use sway_config::model::waybar::BarPosition;
+    use sway_config::ui::pages::waybar::{bar_position_from_index, bar_position_index};
     for (idx, pos) in [
         (0, BarPosition::Top),
         (1, BarPosition::Bottom),
@@ -672,7 +670,7 @@ fn test_waybar_position_index_roundtrip() {
 
 #[test]
 fn test_waybar_modules_right_selection_updates_appstate() {
-    use sway_configurator::model::waybar::WaybarModule;
+    use sway_config::model::waybar::WaybarModule;
     let mut state = AppState::new(Settings::default());
     state
         .settings_mut()
@@ -705,8 +703,8 @@ fn test_waybar_modules_left_updated() {
 
 #[test]
 fn test_notifications_timeout_updates_appstate() {
-    use sway_configurator::model::notifications::NotifPosition;
-    use sway_configurator::ui::pages::notifications::notif_position_index;
+    use sway_config::model::notifications::NotifPosition;
+    use sway_config::ui::pages::notifications::notif_position_index;
     let mut state = AppState::new(Settings::default());
     state.settings_mut().notifications.timeout_ms = 3000;
     state.mark_dirty();
@@ -716,7 +714,7 @@ fn test_notifications_timeout_updates_appstate() {
 
 #[test]
 fn test_notifications_position_index_roundtrip() {
-    use sway_configurator::ui::pages::notifications::{
+    use sway_config::ui::pages::notifications::{
         notif_position_from_index, notif_position_index, NOTIF_POSITIONS,
     };
     for (i, &pos) in NOTIF_POSITIONS.iter().enumerate() {
@@ -743,7 +741,7 @@ fn test_notifications_follow_focus_toggle_updates_appstate() {
 
 #[test]
 fn test_themes_selection_updates_appstate() {
-    use sway_configurator::model::theme::ThemeSelection;
+    use sway_config::model::theme::ThemeSelection;
     let mut state = AppState::new(Settings::default());
     state.settings_mut().theme = Some(ThemeSelection::new("dracula", "user"));
     state.mark_dirty();
@@ -832,7 +830,7 @@ fn test_waybar_module_left_toggle_off_removes_from_vec() {
 
 #[test]
 fn test_waybar_module_right_toggle_on_enables_existing() {
-    use sway_configurator::model::waybar::WaybarModule;
+    use sway_config::model::waybar::WaybarModule;
     let mut state = AppState::new(Settings::default());
     let name = "battery".to_string();
     state
@@ -856,7 +854,7 @@ fn test_waybar_module_right_toggle_on_enables_existing() {
 
 #[test]
 fn test_waybar_module_right_toggle_off_disables_existing() {
-    use sway_configurator::model::waybar::WaybarModule;
+    use sway_config::model::waybar::WaybarModule;
     let mut state = AppState::new(Settings::default());
     let name = "tray".to_string();
     state
@@ -880,7 +878,7 @@ fn test_waybar_module_right_toggle_off_disables_existing() {
 
 #[test]
 fn test_waybar_module_right_toggle_on_adds_if_absent() {
-    use sway_configurator::model::waybar::WaybarModule;
+    use sway_config::model::waybar::WaybarModule;
     let mut state = AppState::new(Settings::default());
     let name = "cpu".to_string();
     // Mirrors closure body for Right toggle-on (absent entry):
@@ -904,7 +902,7 @@ fn test_waybar_module_right_toggle_on_adds_if_absent() {
 
 #[test]
 fn test_autostart_add_entry_updates_appstate() {
-    use sway_configurator::model::autostart::AutostartEntry;
+    use sway_config::model::autostart::AutostartEntry;
     let mut state = AppState::new(Settings::default());
     state.settings_mut().autostart.entries.push(AutostartEntry {
         id: "1".to_string(),
@@ -920,8 +918,8 @@ fn test_autostart_add_entry_updates_appstate() {
 
 #[test]
 fn test_autostart_remove_entry_updates_appstate() {
-    use sway_configurator::model::autostart::AutostartEntry;
-    use sway_configurator::ui::pages::autostart::remove_entry;
+    use sway_config::model::autostart::AutostartEntry;
+    use sway_config::ui::pages::autostart::remove_entry;
     let mut state = AppState::new(Settings::default());
     state.settings_mut().autostart.entries.push(AutostartEntry {
         id: "abc".to_string(),
@@ -938,7 +936,7 @@ fn test_autostart_remove_entry_updates_appstate() {
 
 #[test]
 fn test_autostart_remove_nonexistent_entry_returns_false() {
-    use sway_configurator::ui::pages::autostart::remove_entry;
+    use sway_config::ui::pages::autostart::remove_entry;
     let mut entries = Vec::new();
     let result = remove_entry(&mut entries, "nonexistent");
     assert!(!result);
@@ -946,7 +944,7 @@ fn test_autostart_remove_nonexistent_entry_returns_false() {
 
 #[test]
 fn test_autostart_toggle_entry_updates_appstate() {
-    use sway_configurator::ui::pages::autostart::{make_entry, toggle_entry};
+    use sway_config::ui::pages::autostart::{make_entry, toggle_entry};
     let mut state = AppState::new(Settings::default());
     let entry = make_entry("waybar", "");
     let id = entry.id.clone();
@@ -961,8 +959,8 @@ fn test_autostart_toggle_entry_updates_appstate() {
 
 #[test]
 fn test_autostart_toggle_entry_on() {
-    use sway_configurator::model::autostart::AutostartEntry;
-    use sway_configurator::ui::pages::autostart::toggle_entry;
+    use sway_config::model::autostart::AutostartEntry;
+    use sway_config::ui::pages::autostart::toggle_entry;
     let mut entries = vec![AutostartEntry {
         id: "x".to_string(),
         command: "foo".to_string(),
@@ -975,7 +973,7 @@ fn test_autostart_toggle_entry_on() {
 
 #[test]
 fn test_autostart_toggle_nonexistent_returns_false() {
-    use sway_configurator::ui::pages::autostart::toggle_entry;
+    use sway_config::ui::pages::autostart::toggle_entry;
     let mut entries = Vec::new();
     let found = toggle_entry(&mut entries, "missing", true);
     assert!(!found);
@@ -983,7 +981,7 @@ fn test_autostart_toggle_nonexistent_returns_false() {
 
 #[test]
 fn test_autostart_read_back_matches_loaded() {
-    use sway_configurator::model::autostart::AutostartEntry;
+    use sway_config::model::autostart::AutostartEntry;
     let mut state = AppState::new(Settings::default());
     let entry = AutostartEntry {
         id: "e1".to_string(),
@@ -997,7 +995,7 @@ fn test_autostart_read_back_matches_loaded() {
 
 #[test]
 fn test_autostart_marks_dirty_on_change() {
-    use sway_configurator::ui::pages::autostart::make_entry;
+    use sway_config::ui::pages::autostart::make_entry;
     let mut state = AppState::new(Settings::default());
     state.mark_clean();
     assert!(!state.is_dirty());
@@ -1012,7 +1010,7 @@ fn test_autostart_marks_dirty_on_change() {
 
 #[test]
 fn test_make_entry_helper_creates_enabled_entry() {
-    use sway_configurator::ui::pages::autostart::make_entry;
+    use sway_config::ui::pages::autostart::make_entry;
     let entry = make_entry("dunst", "Notification daemon");
     assert_eq!(entry.command, "dunst");
     assert_eq!(entry.description, "Notification daemon");
@@ -1022,7 +1020,7 @@ fn test_make_entry_helper_creates_enabled_entry() {
 
 #[test]
 fn test_make_entry_helper_empty_description() {
-    use sway_configurator::ui::pages::autostart::make_entry;
+    use sway_config::ui::pages::autostart::make_entry;
     let entry = make_entry("waybar", "");
     assert_eq!(entry.command, "waybar");
     assert_eq!(entry.description, "");
@@ -1031,7 +1029,7 @@ fn test_make_entry_helper_empty_description() {
 
 #[test]
 fn test_make_entry_ids_differ_over_time() {
-    use sway_configurator::ui::pages::autostart::make_entry;
+    use sway_config::ui::pages::autostart::make_entry;
     // IDs include a high-resolution timestamp so collisions are extremely unlikely
     let e1 = make_entry("cmd", "");
     std::thread::sleep(std::time::Duration::from_nanos(1));
@@ -1044,7 +1042,7 @@ fn test_make_entry_ids_differ_over_time() {
 
 #[test]
 fn test_make_entry_spaces_in_command_replaced_in_id() {
-    use sway_configurator::ui::pages::autostart::make_entry;
+    use sway_config::ui::pages::autostart::make_entry;
     let entry = make_entry("my program", "");
     assert!(
         !entry.id.contains(' '),
@@ -1059,9 +1057,9 @@ fn test_make_entry_spaces_in_command_replaced_in_id() {
 
 #[test]
 fn test_apply_in_test_mode_writes_sway_conf_files() {
-    use sway_configurator::config::render::render_and_apply;
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::config::render::render_and_apply;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let tmp = std::env::temp_dir().join("sway_cfg_test_apply");
     let _ = std::fs::remove_dir_all(&tmp);
@@ -1085,8 +1083,8 @@ fn test_apply_in_test_mode_writes_sway_conf_files() {
 
 #[test]
 fn test_apply_marks_clean_on_success() {
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let mut state = AppState::new(Settings::default());
     state.mark_dirty();
@@ -1099,9 +1097,9 @@ fn test_apply_marks_clean_on_success() {
 
 #[test]
 fn test_revert_restores_settings_and_marks_clean() {
-    use sway_configurator::config::store::SettingsStore;
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::config::store::SettingsStore;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let tmp = std::env::temp_dir().join("sway_cfg_test_revert.toml");
     let mut settings = Settings::default();
@@ -1141,8 +1139,8 @@ fn test_revert_dirty_flags_suppress_detection() {
     // Verifies that the Revert flow sets outputs/keyboards/touchpads dirty
     // BEFORE calling on_navigate(), so should_refresh_*() returns false,
     // preventing hardware detection from overwriting reverted settings.
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let mut state = AppState::new(Settings::default());
     state.replace_settings(Settings::default());
@@ -1165,9 +1163,9 @@ fn test_revert_dirty_flags_suppress_detection() {
 
 #[test]
 fn test_revert_load_failure_does_not_replace_state() {
-    use sway_configurator::config::store::SettingsStore;
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::config::store::SettingsStore;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let mut state = AppState::new(Settings::default());
     state.settings_mut().idle.lock_timeout = 99;
@@ -1195,8 +1193,8 @@ fn test_revert_load_failure_does_not_replace_state() {
 
 #[test]
 fn test_apply_bar_hidden_when_clean() {
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let state = AppState::new(Settings::default());
     assert!(
@@ -1207,8 +1205,8 @@ fn test_apply_bar_hidden_when_clean() {
 
 #[test]
 fn test_apply_bar_visible_when_dirty() {
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let mut state = AppState::new(Settings::default());
     state.mark_dirty();
@@ -1217,8 +1215,8 @@ fn test_apply_bar_visible_when_dirty() {
 
 #[test]
 fn test_config_path_none_by_default() {
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let state = AppState::new(Settings::default());
     assert!(state.config_path().is_none());
@@ -1227,8 +1225,8 @@ fn test_config_path_none_by_default() {
 #[test]
 fn test_config_path_override_set() {
     use std::path::PathBuf;
-    use sway_configurator::model::settings::Settings;
-    use sway_configurator::state::AppState;
+    use sway_config::model::settings::Settings;
+    use sway_config::state::AppState;
 
     let mut state = AppState::new(Settings::default());
     state.set_config_path(PathBuf::from("/tmp/sway_test_override"));

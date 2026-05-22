@@ -1,7 +1,7 @@
 /// Test roundtrip serialization of settings model
 /// Tests that settings can be serialized to TOML and deserialized back to the same state
-use sway_configurator::model::settings::Settings;
-use sway_configurator::model::theme::ThemeSelection;
+use sway_config::model::settings::Settings;
+use sway_config::model::theme::ThemeSelection;
 
 #[test]
 fn test_settings_default_serialization() {

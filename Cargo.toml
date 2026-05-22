@@ -1,5 +1,5 @@
 [package]
-name = "sway-configurator"
+name = "sway-config"
 version = "0.1.0"
 edition = "2021"
 description = "GTK4/libadwaita GUI for configuring Sway and Waybar"
@@ -31,10 +31,10 @@ depends = "$auto, sway, waybar"
 section = "utils"
 priority = "optional"
 assets = [
-  ["target/release/sway-configurator", "usr/bin/", "755"],
-  ["packaging/sway-configurator.desktop", "usr/share/applications/", "644"],
-  ["README.md", "usr/share/doc/sway-configurator/README.md", "644"],
-  ["LICENSE", "usr/share/doc/sway-configurator/LICENSE", "644"],
+  ["target/release/sway-config", "usr/bin/", "755"],
+  ["packaging/sway-config.desktop", "usr/share/applications/", "644"],
+  ["README.md", "usr/share/doc/sway-config/README.md", "644"],
+  ["LICENSE", "usr/share/doc/sway-config/LICENSE", "644"],
 ]
 
 [[test]]

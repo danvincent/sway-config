@@ -29,7 +29,7 @@ impl SettingsStore {
     /// * `home` - Optional value of HOME environment variable
     ///
     /// # Returns
-    /// Path to `sway-configurator/settings.toml` using XDG conventions
+    /// Path to `sway-config/settings.toml` using XDG conventions
     pub fn resolve_config_path(xdg_config_home: Option<&str>, home: Option<&str>) -> PathBuf {
         let config_dir = xdg_config_home
             .and_then(|xdg| {
@@ -43,12 +43,12 @@ impl SettingsStore {
             .unwrap_or_else(|| ".config".to_string());
 
         PathBuf::from(config_dir)
-            .join("sway-configurator")
+            .join("sway-config")
             .join("settings.toml")
     }
 
-    /// Resolve the default XDG config path for sway-configurator settings
-    /// Returns: `$XDG_CONFIG_HOME/sway-configurator/settings.toml` (or `~/.config/sway-configurator/settings.toml` if XDG_CONFIG_HOME is unset)
+    /// Resolve the default XDG config path for sway-config settings
+    /// Returns: `$XDG_CONFIG_HOME/sway-config/settings.toml` (or `~/.config/sway-config/settings.toml` if XDG_CONFIG_HOME is unset)
     pub fn default_path() -> PathBuf {
         Self::resolve_config_path(
             env::var("XDG_CONFIG_HOME").ok().as_deref(),
@@ -94,7 +94,7 @@ impl SettingsStore {
     }
 
     /// Create a test store using a temporary directory; settings start as defaults.
-    /// Intended for use with SWAY_CONFIGURATOR_TEST=1.
+    /// Intended for use with SWAY_CONFIG_TEST=1.
     pub fn test_store(dir: &Path) -> Self {
         let path = dir.join("settings.toml");
         SettingsStore {
@@ -119,7 +119,7 @@ mod tests {
         let path = SettingsStore::default_path();
         assert!(path
             .to_string_lossy()
-            .ends_with("sway-configurator/settings.toml"));
+            .ends_with("sway-config/settings.toml"));
     }
 
     #[test]
@@ -132,11 +132,11 @@ mod tests {
     }
 
     #[test]
-    fn test_default_path_includes_sway_configurator() {
+    fn test_default_path_includes_sway_config() {
         let path = SettingsStore::default_path();
         assert!(
-            path.to_string_lossy().contains("sway-configurator"),
-            "default_path should include 'sway-configurator' directory"
+            path.to_string_lossy().contains("sway-config"),
+            "default_path should include 'sway-config' directory"
         );
     }
 
@@ -147,7 +147,7 @@ mod tests {
         let path = SettingsStore::resolve_config_path(Some("/custom/config"), Some("/home/user"));
         assert!(
             path.to_string_lossy()
-                .starts_with("/custom/config/sway-configurator"),
+                .starts_with("/custom/config/sway-config"),
             "resolve_config_path should use XDG_CONFIG_HOME when set: {}",
             path.display()
         );
@@ -158,7 +158,7 @@ mod tests {
         let path = SettingsStore::resolve_config_path(Some(""), Some("/home/user"));
         assert!(
             path.to_string_lossy()
-                .contains("/home/user/.config/sway-configurator"),
+                .contains("/home/user/.config/sway-config"),
             "resolve_config_path should ignore empty XDG_CONFIG_HOME: {}",
             path.display()
         );
@@ -168,7 +168,7 @@ mod tests {
     fn test_resolve_config_path_falls_back_to_home_config_when_xdg_unset() {
         let path = SettingsStore::resolve_config_path(None, Some("/home/testuser"));
         assert!(
-            path.to_string_lossy().contains("/home/testuser/.config/sway-configurator"),
+            path.to_string_lossy().contains("/home/testuser/.config/sway-config"),
             "resolve_config_path should fall back to $HOME/.config when XDG_CONFIG_HOME is unset: {}",
             path.display()
         );
@@ -178,7 +178,7 @@ mod tests {
     fn test_resolve_config_path_uses_fallback_when_both_unset() {
         let path = SettingsStore::resolve_config_path(None, None);
         assert!(
-            path.to_string_lossy().contains(".config/sway-configurator"),
+            path.to_string_lossy().contains(".config/sway-config"),
             "resolve_config_path should use .config fallback when both env vars are unset: {}",
             path.display()
         );
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_open_at_creates_store_with_correct_path() {
-        let dir = std::env::temp_dir().join("sway-configurator-test-open-at");
+        let dir = std::env::temp_dir().join("sway-config-test-open-at");
         std::fs::create_dir_all(&dir).unwrap();
         let store = SettingsStore::open_at(&dir).unwrap();
         assert!(store.path.ends_with("settings.toml"));
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_test_store_uses_provided_dir() {
-        let dir = std::env::temp_dir().join("sway-configurator-test-store");
+        let dir = std::env::temp_dir().join("sway-config-test-store");
         let store = SettingsStore::test_store(&dir);
         assert!(store.path.ends_with("settings.toml"));
         assert!(store.path.starts_with(&dir));
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_open_at_roundtrip_save_and_load() {
-        let dir = std::env::temp_dir().join("sway-configurator-test-roundtrip");
+        let dir = std::env::temp_dir().join("sway-config-test-roundtrip");
         std::fs::create_dir_all(&dir).unwrap();
         let mut store = SettingsStore::open_at(&dir).unwrap();
         store.settings.idle.lock_timeout = 999;

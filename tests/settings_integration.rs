@@ -1,7 +1,7 @@
-use sway_configurator::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
-use sway_configurator::model::output::{OutputConfig, Position, Resolution, Transform};
+use sway_config::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
+use sway_config::model::output::{OutputConfig, Position, Resolution, Transform};
 /// Integration tests for settings with outputs, keyboards, and touchpads
-use sway_configurator::model::settings::Settings;
+use sway_config::model::settings::Settings;
 
 #[test]
 fn test_settings_with_outputs_roundtrip() {

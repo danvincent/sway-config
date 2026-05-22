@@ -1,9 +1,9 @@
-use sway_configurator::model::autostart::{AutostartConfig, AutostartEntry};
+use sway_config::model::autostart::{AutostartConfig, AutostartEntry};
 /// Tests for Phase 4 feature-detected workstation settings
-use sway_configurator::model::idle::IdleConfig;
-use sway_configurator::model::notifications::{NotifPosition, NotificationsConfig};
-use sway_configurator::model::settings::Settings;
-use sway_configurator::model::waybar::{BarPosition, WaybarConfig, WaybarModule};
+use sway_config::model::idle::IdleConfig;
+use sway_config::model::notifications::{NotifPosition, NotificationsConfig};
+use sway_config::model::settings::Settings;
+use sway_config::model::waybar::{BarPosition, WaybarConfig, WaybarModule};
 
 // ============================================================================
 // Idle Model Tests
@@ -347,49 +347,49 @@ source = "system"
 fn test_has_swayidle_returns_bool() {
     // Test that the function returns a bool without panicking
     // We can't assert the value since it depends on whether swayidle is installed
-    let result = sway_configurator::config::feature::has_swayidle();
+    let result = sway_config::config::feature::has_swayidle();
     let _ = result; // suppress unused warning, we just need it to not panic
 }
 
 #[test]
 fn test_has_waybar_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_waybar();
+    let result = sway_config::config::feature::has_waybar();
     let _ = result;
 }
 
 #[test]
 fn test_has_battery_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_battery();
+    let result = sway_config::config::feature::has_battery();
     let _ = result;
 }
 
 #[test]
 fn test_has_screen_locker_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_screen_locker();
+    let result = sway_config::config::feature::has_screen_locker();
     let _ = result;
 }
 
 #[test]
 fn test_has_audio_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_audio();
+    let result = sway_config::config::feature::has_audio();
     let _ = result;
 }
 
 #[test]
 fn test_has_network_manager_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_network_manager();
+    let result = sway_config::config::feature::has_network_manager();
     let _ = result;
 }
 
 #[test]
 fn test_has_notification_daemon_returns_bool() {
     // Test that the function returns a bool without panicking
-    let result = sway_configurator::config::feature::has_notification_daemon();
+    let result = sway_config::config::feature::has_notification_daemon();
     let _ = result;
 }
 
@@ -405,6 +405,6 @@ fn test_feature_detection_with_known_binary() {
     if output.is_ok() && output.unwrap().status.success() {
         // If 'which sh' works, our implementation should also work
         // This is just a smoke test to ensure no panics occur
-        let _ = sway_configurator::config::feature::has_swayidle();
+        let _ = sway_config::config::feature::has_swayidle();
     }
 }

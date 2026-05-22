@@ -1,10 +1,10 @@
-use sway_configurator::config::detect;
+use sway_config::config::detect;
 /// Tests for Sway session detection and configuration parsing
 /// These tests use fixture JSON strings and do NOT invoke the live swaymsg command
-use sway_configurator::config::detect::{LibinputConfig, Rect, SwayInput, SwayOutput};
-use sway_configurator::config::swaymsg::is_sway_running;
-use sway_configurator::model::input::{KeyboardConfig, TouchpadConfig};
-use sway_configurator::model::output::OutputConfig;
+use sway_config::config::detect::{LibinputConfig, Rect, SwayInput, SwayOutput};
+use sway_config::config::swaymsg::is_sway_running;
+use sway_config::model::input::{KeyboardConfig, TouchpadConfig};
+use sway_config::model::output::OutputConfig;
 
 // ============================================================================
 // JSON FIXTURES
@@ -261,7 +261,7 @@ fn test_output_config_from_sway() {
     assert_eq!(config.position.y, 0);
     assert_eq!(
         config.transform,
-        sway_configurator::model::output::Transform::Normal
+        sway_config::model::output::Transform::Normal
     );
 
     assert!(config.resolution.is_some());
@@ -280,7 +280,7 @@ fn test_keyboard_config_from_sway() {
 
     // Layout and options come from the sway config file; variant is empty (not set in sway config).
     let (sway_layout, sway_variant, sway_options) =
-        sway_configurator::config::detect::sway_config_keyboard_defaults();
+        sway_config::config::detect::sway_config_keyboard_defaults();
     assert_eq!(config.identifier, "1:1:AT_Translated_Set_2_keyboard");
     assert_eq!(
         config.xkb_layout,
@@ -313,7 +313,7 @@ fn test_touchpad_config_from_sway() {
     assert_eq!(config.accel_speed, 0.0);
     assert_eq!(
         config.accel_profile,
-        sway_configurator::model::input::AccelProfile::Adaptive
+        sway_config::model::input::AccelProfile::Adaptive
     );
     assert!(!config.left_handed); // disabled
     assert!(!config.middle_emulation); // disabled
@@ -347,7 +347,7 @@ fn test_output_config_defaults() {
     assert_eq!(config.scale, 1.0);
     assert_eq!(
         config.transform,
-        sway_configurator::model::output::Transform::Normal
+        sway_config::model::output::Transform::Normal
     );
 }
 
@@ -369,8 +369,8 @@ fn test_keyboard_config_defaults() {
     let config = KeyboardConfig::from_sway(&sway_input);
 
     // Layout comes from sway config or /etc/default/keyboard fallback.
-    let (expected_layout, _) = sway_configurator::config::detect::system_keyboard_layout();
-    let (sway_layout, _, _) = sway_configurator::config::detect::sway_config_keyboard_defaults();
+    let (expected_layout, _) = sway_config::config::detect::system_keyboard_layout();
+    let (sway_layout, _, _) = sway_config::config::detect::sway_config_keyboard_defaults();
     let expected = if !sway_layout.is_empty() {
         sway_layout
     } else {
@@ -383,7 +383,7 @@ fn test_keyboard_config_defaults() {
 
 #[test]
 fn test_transform_default_is_normal() {
-    use sway_configurator::model::output::Transform;
+    use sway_config::model::output::Transform;
     assert_eq!(Transform::default(), Transform::Normal);
 }
 

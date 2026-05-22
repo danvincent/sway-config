@@ -1,11 +1,11 @@
 /// Apply integration tests - full render + write + reload workflow
-use sway_configurator::config::render_model::RenderModel;
-use sway_configurator::model::autostart::{AutostartConfig, AutostartEntry};
-use sway_configurator::model::idle::IdleConfig;
-use sway_configurator::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
-use sway_configurator::model::output::{OutputConfig, Position, Resolution, Transform};
-use sway_configurator::model::settings::Settings;
-use sway_configurator::model::waybar::{BarPosition, WaybarConfig, WaybarModule};
+use sway_config::config::render_model::RenderModel;
+use sway_config::model::autostart::{AutostartConfig, AutostartEntry};
+use sway_config::model::idle::IdleConfig;
+use sway_config::model::input::{AccelProfile, KeyboardConfig, TouchpadConfig};
+use sway_config::model::output::{OutputConfig, Position, Resolution, Transform};
+use sway_config::model::settings::Settings;
+use sway_config::model::waybar::{BarPosition, WaybarConfig, WaybarModule};
 
 #[test]
 fn test_render_model_from_empty_settings() {
@@ -346,7 +346,7 @@ fn test_inputs_conf_format() {
 
 #[test]
 fn test_apply_dry_run_does_not_write_files() {
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -375,7 +375,7 @@ fn test_apply_dry_run_does_not_write_files() {
 
 #[test]
 fn test_apply_dry_run_returns_file_list() {
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -409,7 +409,7 @@ fn test_apply_dry_run_returns_file_list() {
 #[test]
 fn test_apply_writes_outputs_conf() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -448,7 +448,7 @@ fn test_apply_writes_outputs_conf() {
 #[test]
 fn test_apply_writes_inputs_conf() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -482,7 +482,7 @@ fn test_apply_writes_inputs_conf() {
 #[test]
 fn test_apply_writes_idle_conf() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -513,7 +513,7 @@ fn test_apply_writes_idle_conf() {
 
 #[test]
 fn test_apply_creates_parent_dirs() {
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -549,7 +549,7 @@ fn test_apply_creates_parent_dirs() {
 
 #[test]
 fn test_apply_result_success_fields() {
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let settings = Settings::default();
@@ -572,7 +572,7 @@ fn test_apply_result_success_fields() {
 #[test]
 fn test_apply_writes_empty_idle_conf_when_disabled() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -611,7 +611,7 @@ fn test_apply_writes_empty_idle_conf_when_disabled() {
 #[test]
 fn test_apply_writes_empty_autostart_conf_when_all_disabled() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -656,7 +656,7 @@ fn test_apply_writes_empty_autostart_conf_when_all_disabled() {
 #[test]
 fn test_apply_writes_empty_waybar_config_json_when_disabled() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();
@@ -697,7 +697,7 @@ fn test_apply_writes_empty_waybar_config_json_when_disabled() {
 #[test]
 fn test_apply_clears_stale_files() {
     use std::fs;
-    use sway_configurator::config::apply::{apply, ApplyConfig};
+    use sway_config::config::apply::{apply, ApplyConfig};
     use tempfile::TempDir;
 
     let mut settings = Settings::default();

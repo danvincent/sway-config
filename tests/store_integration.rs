@@ -1,6 +1,6 @@
 /// Test configuration store load/save
 /// Tests persistence of settings to disk and loading them back
-use sway_configurator::config::store::SettingsStore;
+use sway_config::config::store::SettingsStore;
 use tempfile::TempDir;
 
 #[test]
@@ -9,7 +9,7 @@ fn test_store_save_and_load() {
     let store_path = temp_dir.path().join("settings.toml");
 
     let mut store = SettingsStore::new(store_path.clone());
-    store.settings.theme = Some(sway_configurator::model::theme::ThemeSelection {
+    store.settings.theme = Some(sway_config::model::theme::ThemeSelection {
         name: "test-theme".to_string(),
         source: "test-source".to_string(),
         path: String::new(),
@@ -49,7 +49,7 @@ fn test_store_preserves_data_across_roundtrip() {
     // First store
     {
         let mut store = SettingsStore::new(store_path.clone());
-        store.settings.theme = Some(sway_configurator::model::theme::ThemeSelection {
+        store.settings.theme = Some(sway_config::model::theme::ThemeSelection {
             name: "theme-1".to_string(),
             source: "source-1".to_string(),
             path: String::new(),
@@ -66,7 +66,7 @@ fn test_store_preserves_data_across_roundtrip() {
     // Modify and save again
     {
         let mut store = SettingsStore::load(store_path.clone()).expect("Failed to reload");
-        store.settings.theme = Some(sway_configurator::model::theme::ThemeSelection {
+        store.settings.theme = Some(sway_config::model::theme::ThemeSelection {
             name: "theme-2".to_string(),
             source: "source-2".to_string(),
             path: String::new(),
@@ -92,8 +92,8 @@ fn test_open_default_returns_store() {
         store
             .path
             .to_string_lossy()
-            .ends_with("sway-configurator/settings.toml"),
-        "Store path should end with 'sway-configurator/settings.toml', got: {}",
+            .ends_with("sway-config/settings.toml"),
+        "Store path should end with 'sway-config/settings.toml', got: {}",
         store.path.display()
     );
 

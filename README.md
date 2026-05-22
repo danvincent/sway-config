@@ -1,11 +1,11 @@
 ---
-# sway-configurator
+# sway-config
 
 A standalone GUI editor for Sway configuration — manage a live session safely with generated config + live apply.
 
 ## Description
 
-sway-configurator is a Rust + GTK4/libadwaita application for configuring Sway and Waybar. It keeps settings in `~/.config/sway-configurator/settings.toml`, applies changes from one global **Apply** action, and updates generated runtime files for Sway/Waybar/theme integration.
+sway-config is a Rust + GTK4/libadwaita application for configuring Sway and Waybar. It keeps settings in `~/.config/sway-config/settings.toml`, applies changes from one global **Apply** action, and updates generated runtime files for Sway/Waybar/theme integration.
 
 ## Features
 
@@ -14,7 +14,7 @@ sway-configurator is a Rust + GTK4/libadwaita application for configuring Sway a
 - **Themes + overrides** (wallpaper, font family/size, gaps, border width, waybar opacity)
 - **Built-in + user theme discovery** from `~/.config/sway/themes` and `~/source/SwayConfig/themes`
 - **Waybar integration** with safe reload behavior
-- **Settings persisted** to `$XDG_CONFIG_HOME/sway-configurator/settings.toml`
+- **Settings persisted** to `$XDG_CONFIG_HOME/sway-config/settings.toml`
 - **Headless-safe test suite** with `--no-default-features`
 
 ## Settings Pages
@@ -141,8 +141,8 @@ include ~/.config/sway/conf.d/*
 
 ## Settings File
 
-`$XDG_CONFIG_HOME/sway-configurator/settings.toml`  
-Defaults to `~/.config/sway-configurator/settings.toml`
+`$XDG_CONFIG_HOME/sway-config/settings.toml`  
+Defaults to `~/.config/sway-config/settings.toml`
 
 ## Screenshots
 
