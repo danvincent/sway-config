@@ -282,14 +282,20 @@ fn test_keyboard_config_from_sway() {
     let (sway_layout, sway_variant, sway_options) =
         sway_config::config::detect::sway_config_keyboard_defaults();
     assert_eq!(config.identifier, "1:1:AT_Translated_Set_2_keyboard");
-    assert_eq!(
-        config.xkb_layout,
-        if !sway_layout.is_empty() {
-            sway_layout
-        } else {
-            "gb".to_string()
-        }
-    );
+    let expected_layout = sway_input
+        .xkb_layouts_as_symbols
+        .first()
+        .cloned()
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            if !sway_layout.is_empty() {
+                Some(sway_layout.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "us".to_string());
+    assert_eq!(config.xkb_layout, expected_layout);
     assert_eq!(config.xkb_variant, sway_variant);
     assert_eq!(config.xkb_options, sway_options);
     assert_eq!(config.repeat_delay, 600);

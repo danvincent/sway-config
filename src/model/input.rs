@@ -68,12 +68,24 @@ impl KeyboardConfig {
         let (cfg_layout, cfg_variant, cfg_options) =
             crate::config::detect::sway_config_keyboard_defaults();
 
-        let xkb_layout = if !cfg_layout.is_empty() {
-            cfg_layout
-        } else {
-            let (sys_layout, _) = crate::config::detect::system_keyboard_layout();
-            sys_layout
-        };
+        // Prefer the active Sway-reported symbol from live input JSON.
+        // Fall back to sway config defaults, then system keyboard defaults.
+        let xkb_layout = input
+            .xkb_layouts_as_symbols
+            .first()
+            .cloned()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                if !cfg_layout.is_empty() {
+                    Some(cfg_layout.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                let (sys_layout, _) = crate::config::detect::system_keyboard_layout();
+                sys_layout
+            });
 
         // Read repeat settings from live sway input if available
         let repeat_delay = input.repeat_delay.unwrap_or(600);
