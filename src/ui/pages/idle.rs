@@ -1,7 +1,7 @@
 /// Idle configuration page (screensaver, lock)
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use crate::model::idle::IdleConfig;
 use crate::state::AppState;
@@ -15,6 +15,7 @@ pub struct IdlePage {
     before_sleep_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    loading: Rc<Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
 
@@ -72,7 +73,48 @@ impl IdlePage {
         clamp.set_child(Some(&prefs_page));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
-        
+
+        let loading = Rc::new(Cell::new(false));
+
+        // ── Signal connections ──────────────────────────────────────────────────
+
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            lock_timeout_spin.connect_value_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().idle.lock_timeout = row.value() as u32;
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            screen_off_timeout_spin.connect_value_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().idle.screen_off_timeout = row.value() as u32;
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            lock_command_entry.connect_changed(move |entry| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().idle.lock_command = entry.text().to_string();
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            before_sleep_switch.connect_active_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().idle.before_sleep = row.is_active();
+                state.borrow_mut().mark_dirty();
+            });
+        }
+
         IdlePage {
             widget,
             lock_timeout_spin,
@@ -81,6 +123,7 @@ impl IdlePage {
             before_sleep_switch,
             preferences_group,
             banner_group,
+            loading,
             app_state,
         }
     }
@@ -90,29 +133,27 @@ impl IdlePage {
         let config = self.app_state.borrow().settings().idle.clone();
         self.load_idle(&config);
         
-        // Check for required binaries
         let has_swayidle = crate::config::feature::has_swayidle();
         let has_locker = crate::config::feature::has_screen_locker();
-        
         self.bind_detection(has_swayidle, has_locker);
     }
     
-    /// Load idle configuration into the page
+    /// Load idle configuration into the page (suppresses signal write-back)
     pub fn load_idle(&self, config: &IdleConfig) {
+        self.loading.set(true);
         self.lock_timeout_spin.set_value(config.lock_timeout as f64);
         self.screen_off_timeout_spin.set_value(config.screen_off_timeout as f64);
         self.lock_command_entry.set_text(&config.lock_command);
         self.before_sleep_switch.set_active(config.before_sleep);
+        self.loading.set(false);
     }
     
     /// Bind feature detection and show warnings if needed
     pub fn bind_detection(&self, has_swayidle: bool, has_locker: bool) {
-        // Clear existing banner warnings
         while let Some(child) = self.banner_group.first_child() {
             self.banner_group.remove(&child);
         }
         
-        // Disable preferences group if critical features are missing
         if !has_swayidle || !has_locker {
             self.preferences_group.set_sensitive(false);
             
@@ -129,7 +170,6 @@ impl IdlePage {
                 self.banner_group.add(&banner);
             }
         } else {
-            // All features available - enable controls and hide warnings
             self.preferences_group.set_sensitive(true);
         }
     }

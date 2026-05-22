@@ -1,14 +1,12 @@
 /// Pages module - UI pages for different configuration sections
 pub mod outputs;
 pub mod inputs;
+pub mod waybar;
+pub mod notifications;
 #[cfg(feature = "gtk")]
 pub mod idle;
 #[cfg(feature = "gtk")]
-pub mod waybar;
-#[cfg(feature = "gtk")]
 pub mod autostart;
-#[cfg(feature = "gtk")]
-pub mod notifications;
 #[cfg(feature = "gtk")]
 pub mod themes;
 #[cfg(feature = "gtk")]

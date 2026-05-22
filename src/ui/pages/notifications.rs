@@ -1,12 +1,59 @@
 /// Notifications configuration page
+use crate::model::notifications::NotifPosition;
+
+// ── Pure helpers (no GTK) ──────────────────────────────────────────────────────
+
+/// Labels for the notifications position ComboRow, in index order.
+pub const NOTIF_POSITIONS: [NotifPosition; 7] = [
+    NotifPosition::TopRight,
+    NotifPosition::TopLeft,
+    NotifPosition::TopCenter,
+    NotifPosition::BottomRight,
+    NotifPosition::BottomLeft,
+    NotifPosition::BottomCenter,
+    NotifPosition::Center,
+];
+
+/// Human-readable label for a NotifPosition.
+pub fn notif_position_label(p: NotifPosition) -> &'static str {
+    match p {
+        NotifPosition::TopRight => "Top Right",
+        NotifPosition::TopLeft => "Top Left",
+        NotifPosition::TopCenter => "Top Center",
+        NotifPosition::BottomRight => "Bottom Right",
+        NotifPosition::BottomLeft => "Bottom Left",
+        NotifPosition::BottomCenter => "Bottom Center",
+        NotifPosition::Center => "Center",
+    }
+}
+
+/// Index of a NotifPosition in NOTIF_POSITIONS.
+pub fn notif_position_index(p: NotifPosition) -> u32 {
+    NOTIF_POSITIONS.iter().position(|&x| x == p).unwrap_or(0) as u32
+}
+
+/// NotifPosition from a ComboRow selected index.
+pub fn notif_position_from_index(idx: u32) -> NotifPosition {
+    NOTIF_POSITIONS.get(idx as usize).copied().unwrap_or(NotifPosition::TopRight)
+}
+
+// ── GTK page ──────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "gtk")]
 use gtk4::prelude::*;
+#[cfg(feature = "gtk")]
 use libadwaita::prelude::*;
-use std::cell::RefCell;
+#[cfg(feature = "gtk")]
+use std::cell::{Cell, RefCell};
+#[cfg(feature = "gtk")]
 use std::rc::Rc;
-use crate::model::notifications::{NotificationsConfig, NotifPosition};
+#[cfg(feature = "gtk")]
+use crate::model::notifications::NotificationsConfig;
+#[cfg(feature = "gtk")]
 use crate::state::AppState;
 
 /// Notifications page - for configuring notifications
+#[cfg(feature = "gtk")]
 pub struct NotificationsPage {
     widget: gtk4::Box,
     timeout_spin: libadwaita::SpinRow,
@@ -15,9 +62,11 @@ pub struct NotificationsPage {
     follow_focus_switch: libadwaita::SwitchRow,
     preferences_group: libadwaita::PreferencesGroup,
     banner_group: libadwaita::PreferencesGroup,
+    loading: Rc<Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
 
+#[cfg(feature = "gtk")]
 impl NotificationsPage {
     /// Create a new notifications page
     pub fn new(app_state: Rc<RefCell<AppState>>) -> Self {
@@ -32,38 +81,30 @@ impl NotificationsPage {
         
         let prefs_page = libadwaita::PreferencesPage::new();
         
-        // Main group
         let preferences_group = libadwaita::PreferencesGroup::new();
         preferences_group.set_title("Notification Settings");
         
-        // Timeout spin row
         let adj = gtk4::Adjustment::new(5000.0, 1000.0, 60000.0, 100.0, 1000.0, 0.0);
         let timeout_spin = libadwaita::SpinRow::new(Some(&adj), 100.0, 0);
-        timeout_spin.set_title("Timeout");
+        timeout_spin.set_title("Timeout (ms)");
         timeout_spin.set_subtitle("How long notifications display before auto-dismissing");
         preferences_group.add(&timeout_spin);
         
-        // Max visible spin row
         let adj = gtk4::Adjustment::new(5.0, 1.0, 20.0, 1.0, 1.0, 0.0);
         let max_visible_spin = libadwaita::SpinRow::new(Some(&adj), 1.0, 0);
         max_visible_spin.set_title("Maximum visible");
         max_visible_spin.set_subtitle("Maximum number of visible notifications");
         preferences_group.add(&max_visible_spin);
         
-        // Position combo
-        let position_model = gtk4::StringList::new(&[
-            "Top Right", "Top Left", "Top Center",
-            "Bottom Right", "Bottom Left", "Bottom Center",
-            "Center"
-        ]);
+        let position_labels: Vec<&str> = NOTIF_POSITIONS.iter().map(|&p| notif_position_label(p)).collect();
+        let position_model = gtk4::StringList::new(&position_labels);
         let position_combo = libadwaita::ComboRow::new();
         position_combo.set_model(Some(&position_model));
         position_combo.set_title("Position");
         position_combo.set_subtitle("Where notifications appear on screen");
-        position_combo.set_selected(0); // Default: TopRight
+        position_combo.set_selected(0);
         preferences_group.add(&position_combo);
         
-        // Follow focus switch
         let follow_focus_switch = libadwaita::SwitchRow::new();
         follow_focus_switch.set_title("Follow focus");
         follow_focus_switch.set_subtitle("Show notifications on focused monitor (if supported)");
@@ -72,14 +113,55 @@ impl NotificationsPage {
         
         prefs_page.add(&preferences_group);
         
-        // Banner group for warnings (starts empty, will be populated by bind_detection)
         let banner_group = libadwaita::PreferencesGroup::new();
         prefs_page.add(&banner_group);
         
         clamp.set_child(Some(&prefs_page));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
-        
+
+        let loading = Rc::new(Cell::new(false));
+
+        // ── Signal connections ──────────────────────────────────────────────────
+
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            timeout_spin.connect_value_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().notifications.timeout_ms = row.value() as u32;
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            max_visible_spin.connect_value_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().notifications.max_visible = row.value() as u32;
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            position_combo.connect_selected_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().notifications.position =
+                    notif_position_from_index(row.selected());
+                state.borrow_mut().mark_dirty();
+            });
+        }
+        {
+            let state = Rc::clone(&app_state);
+            let loading = Rc::clone(&loading);
+            follow_focus_switch.connect_active_notify(move |row| {
+                if loading.get() { return; }
+                state.borrow_mut().settings_mut().notifications.follow_focus = row.is_active();
+                state.borrow_mut().mark_dirty();
+            });
+        }
+
         NotificationsPage {
             widget,
             timeout_spin,
@@ -88,6 +170,7 @@ impl NotificationsPage {
             follow_focus_switch,
             preferences_group,
             banner_group,
+            loading,
             app_state,
         }
     }
@@ -97,37 +180,26 @@ impl NotificationsPage {
         let config = self.app_state.borrow().settings().notifications.clone();
         self.load_notifications(&config);
         
-        // Check for notification daemon
         let has_daemon = crate::config::feature::has_notification_daemon();
         self.bind_detection(has_daemon);
     }
     
-    /// Load notifications configuration into the page
+    /// Load notifications configuration into the page (suppresses signal write-back)
     pub fn load_notifications(&self, config: &NotificationsConfig) {
+        self.loading.set(true);
         self.timeout_spin.set_value(config.timeout_ms as f64);
         self.max_visible_spin.set_value(config.max_visible as f64);
-        
-        let pos_idx = match config.position {
-            NotifPosition::TopRight => 0,
-            NotifPosition::TopLeft => 1,
-            NotifPosition::TopCenter => 2,
-            NotifPosition::BottomRight => 3,
-            NotifPosition::BottomLeft => 4,
-            NotifPosition::BottomCenter => 5,
-            NotifPosition::Center => 6,
-        };
-        self.position_combo.set_selected(pos_idx);
+        self.position_combo.set_selected(notif_position_index(config.position));
         self.follow_focus_switch.set_active(config.follow_focus);
+        self.loading.set(false);
     }
     
     /// Bind feature detection and show warnings if needed
     pub fn bind_detection(&self, has_daemon: bool) {
-        // Clear existing banner warnings
         while let Some(child) = self.banner_group.first_child() {
             self.banner_group.remove(&child);
         }
         
-        // Disable preferences group if notification daemon is not found
         if !has_daemon {
             self.preferences_group.set_sensitive(false);
             
@@ -136,7 +208,6 @@ impl NotificationsPage {
             banner.set_subtitle("Install dunst, mako, or swaync to enable notifications");
             self.banner_group.add(&banner);
         } else {
-            // Notification daemon available - enable controls and hide warnings
             self.preferences_group.set_sensitive(true);
         }
     }
@@ -147,6 +218,7 @@ impl NotificationsPage {
     }
 }
 
+#[cfg(feature = "gtk")]
 impl Default for NotificationsPage {
     fn default() -> Self {
         use crate::model::settings::Settings;

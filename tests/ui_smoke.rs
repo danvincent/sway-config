@@ -525,3 +525,244 @@ fn test_inputs_read_back_matches_loaded() {
     assert_eq!(state.settings().keyboards[0], kb);
     assert_eq!(state.settings().touchpads[0], tp);
 }
+
+// ── Phase 5: Idle / Waybar / Notifications / Themes ───────────────────────────
+
+#[test]
+fn test_idle_lock_timeout_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().idle.lock_timeout = 600;
+    state.mark_dirty();
+    assert_eq!(state.settings().idle.lock_timeout, 600);
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_idle_screen_off_timeout_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().idle.screen_off_timeout = 120;
+    state.mark_dirty();
+    assert_eq!(state.settings().idle.screen_off_timeout, 120);
+}
+
+#[test]
+fn test_idle_lock_command_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().idle.lock_command = "waylock".to_string();
+    state.mark_dirty();
+    assert_eq!(state.settings().idle.lock_command, "waylock");
+}
+
+#[test]
+fn test_idle_before_sleep_toggle_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().idle.before_sleep = false;
+    state.mark_dirty();
+    assert!(!state.settings().idle.before_sleep);
+}
+
+#[test]
+fn test_waybar_enabled_toggle_updates_appstate() {
+    use sway_configurator::ui::pages::waybar::bar_position_from_index;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().waybar.enabled = false;
+    state.mark_dirty();
+    assert!(!state.settings().waybar.enabled);
+    // Ensure position round-trips
+    state.settings_mut().waybar.position = bar_position_from_index(1);
+    assert_eq!(
+        sway_configurator::ui::pages::waybar::bar_position_index(state.settings().waybar.position),
+        1
+    );
+}
+
+#[test]
+fn test_waybar_position_index_roundtrip() {
+    use sway_configurator::ui::pages::waybar::{bar_position_index, bar_position_from_index};
+    use sway_configurator::model::waybar::BarPosition;
+    for (idx, pos) in [
+        (0, BarPosition::Top),
+        (1, BarPosition::Bottom),
+        (2, BarPosition::Left),
+        (3, BarPosition::Right),
+    ] {
+        assert_eq!(bar_position_index(pos), idx);
+        assert_eq!(bar_position_from_index(idx), pos);
+    }
+}
+
+#[test]
+fn test_waybar_modules_right_selection_updates_appstate() {
+    use sway_configurator::model::waybar::WaybarModule;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().waybar.modules_right.push(WaybarModule::new("battery", true));
+    state.mark_dirty();
+    assert!(state.settings().waybar.modules_right.iter().any(|m| m.name == "battery" && m.enabled));
+}
+
+#[test]
+fn test_waybar_modules_left_updated() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().waybar.modules_left.push("sway/workspaces".to_string());
+    assert!(state.settings().waybar.modules_left.contains(&"sway/workspaces".to_string()));
+}
+
+#[test]
+fn test_notifications_timeout_updates_appstate() {
+    use sway_configurator::ui::pages::notifications::notif_position_index;
+    use sway_configurator::model::notifications::NotifPosition;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().notifications.timeout_ms = 3000;
+    state.mark_dirty();
+    assert_eq!(state.settings().notifications.timeout_ms, 3000);
+    assert_eq!(notif_position_index(NotifPosition::TopRight), 0);
+}
+
+#[test]
+fn test_notifications_position_index_roundtrip() {
+    use sway_configurator::ui::pages::notifications::{
+        notif_position_index, notif_position_from_index, NOTIF_POSITIONS,
+    };
+    for (i, &pos) in NOTIF_POSITIONS.iter().enumerate() {
+        assert_eq!(notif_position_index(pos), i as u32);
+        assert_eq!(notif_position_from_index(i as u32), pos);
+    }
+}
+
+#[test]
+fn test_notifications_max_visible_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().notifications.max_visible = 10;
+    state.mark_dirty();
+    assert_eq!(state.settings().notifications.max_visible, 10);
+}
+
+#[test]
+fn test_notifications_follow_focus_toggle_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().notifications.follow_focus = true;
+    state.mark_dirty();
+    assert!(state.settings().notifications.follow_focus);
+}
+
+#[test]
+fn test_themes_selection_updates_appstate() {
+    use sway_configurator::model::theme::ThemeSelection;
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().theme = Some(ThemeSelection::new("dracula", "user"));
+    state.mark_dirty();
+    let theme = state.settings().theme.as_ref().unwrap();
+    assert_eq!(theme.name, "dracula");
+    assert_eq!(theme.source, "user");
+}
+
+#[test]
+fn test_themes_custom_path_updates_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().custom_themes_path = Some("/home/user/.config/sway/themes".to_string());
+    state.mark_dirty();
+    assert_eq!(
+        state.settings().custom_themes_path.as_deref(),
+        Some("/home/user/.config/sway/themes")
+    );
+}
+
+#[test]
+fn test_themes_clearing_custom_path_clears_appstate() {
+    let mut state = AppState::new(Settings::default());
+    state.settings_mut().custom_themes_path = Some("/some/path".to_string());
+    state.settings_mut().custom_themes_path = None;
+    assert!(state.settings().custom_themes_path.is_none());
+}
+
+// ── Phase 5 module toggle semantics + state contract ──────────────────────────
+//
+// Note: GTK signal handlers (connect_active_notify, connect_row_selected, etc.)
+// and the loading guard behaviour in load_idle/load_waybar/load_notifications/
+// load_themes require an initialised GTK display and cannot be executed in
+// headless `--no-default-features` tests. The tests below cover:
+//   (a) the AppState data-model contract that the closures rely on, and
+//   (b) the module-list toggle logic that is replicated verbatim in the
+//       waybar.rs signal closures.
+// Any regression in the guard wiring itself would show up at runtime or in a
+// GTK integration test.
+
+/// Baseline contract: `settings_mut()` does not call `mark_dirty()`.
+/// Every page's `load_*()` method relies on this — it writes fields without
+/// calling `mark_dirty()` and therefore must not dirty the state.
+#[test]
+fn test_settings_mut_alone_does_not_dirty_state() {
+    let mut state = AppState::new(Settings::default());
+    state.mark_clean();
+    state.settings_mut().idle.lock_timeout = 300;
+    state.settings_mut().waybar.height = 42;
+    state.settings_mut().notifications.timeout_ms = 1234;
+    assert!(!state.is_dirty(), "settings_mut() without mark_dirty() must not dirty state");
+}
+
+#[test]
+fn test_waybar_module_left_toggle_on_adds_to_vec() {
+    let mut state = AppState::new(Settings::default());
+    let name = "sway/workspaces".to_string();
+    // Mirrors the closure body in build_module_section() for Left:
+    state.settings_mut().waybar.modules_left.retain(|m| m != &name);
+    state.settings_mut().waybar.modules_left.push(name.clone());
+    state.mark_dirty();
+    assert!(state.settings().waybar.modules_left.contains(&name));
+    assert!(state.is_dirty());
+}
+
+#[test]
+fn test_waybar_module_left_toggle_off_removes_from_vec() {
+    let mut state = AppState::new(Settings::default());
+    let name = "sway/workspaces".to_string();
+    state.settings_mut().waybar.modules_left.push(name.clone());
+    // Mirrors closure body for Left toggle-off:
+    state.settings_mut().waybar.modules_left.retain(|m| m != &name);
+    state.mark_dirty();
+    assert!(!state.settings().waybar.modules_left.contains(&name));
+}
+
+#[test]
+fn test_waybar_module_right_toggle_on_enables_existing() {
+    use sway_configurator::model::waybar::WaybarModule;
+    let mut state = AppState::new(Settings::default());
+    let name = "battery".to_string();
+    state.settings_mut().waybar.modules_right.push(WaybarModule::new(&name, false));
+    // Mirrors closure body for Right toggle-on (existing entry):
+    let modules = &mut state.settings_mut().waybar.modules_right;
+    if let Some(m) = modules.iter_mut().find(|m| m.name == name) {
+        m.enabled = true;
+    }
+    state.mark_dirty();
+    assert!(state.settings().waybar.modules_right.iter().any(|m| m.name == name && m.enabled));
+}
+
+#[test]
+fn test_waybar_module_right_toggle_off_disables_existing() {
+    use sway_configurator::model::waybar::WaybarModule;
+    let mut state = AppState::new(Settings::default());
+    let name = "tray".to_string();
+    state.settings_mut().waybar.modules_right.push(WaybarModule::new(&name, true));
+    // Mirrors closure body for Right toggle-off:
+    let modules = &mut state.settings_mut().waybar.modules_right;
+    if let Some(m) = modules.iter_mut().find(|m| m.name == name) {
+        m.enabled = false;
+    }
+    state.mark_dirty();
+    assert!(state.settings().waybar.modules_right.iter().any(|m| m.name == name && !m.enabled));
+}
+
+#[test]
+fn test_waybar_module_right_toggle_on_adds_if_absent() {
+    use sway_configurator::model::waybar::WaybarModule;
+    let mut state = AppState::new(Settings::default());
+    let name = "cpu".to_string();
+    // Mirrors closure body for Right toggle-on (absent entry):
+    let modules = &mut state.settings_mut().waybar.modules_right;
+    if modules.iter_mut().find(|m| m.name == name).is_none() {
+        modules.push(WaybarModule::new(&name, true));
+    }
+    state.mark_dirty();
+    assert!(state.settings().waybar.modules_right.iter().any(|m| m.name == name && m.enabled));
+}

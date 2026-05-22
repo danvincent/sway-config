@@ -1,5 +1,6 @@
 /// Themes configuration page
 use gtk4::prelude::*;
+use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::model::theme::ThemeSelection;
@@ -10,6 +11,10 @@ use std::path::PathBuf;
 pub struct ThemesPage {
     widget: gtk4::Box,
     list_box: gtk4::ListBox,
+    custom_path_entry: libadwaita::EntryRow,
+    /// Tracks loaded theme names in list_box order for selection → AppState mapping
+    theme_names: Rc<RefCell<Vec<ThemeSelection>>>,
+    loading: Rc<std::cell::Cell<bool>>,
     app_state: Rc<RefCell<AppState>>,
 }
 
@@ -25,33 +30,68 @@ impl ThemesPage {
         let clamp = libadwaita::Clamp::new();
         clamp.set_maximum_size(800);
         
-        let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-        vbox.set_margin_top(12);
-        vbox.set_margin_bottom(12);
-        vbox.set_margin_start(12);
-        vbox.set_margin_end(12);
-        
-        let title_label = gtk4::Label::new(Some("Select Theme"));
-        title_label.set_css_classes(&["title-2"]);
-        title_label.set_halign(gtk4::Align::Start);
-        vbox.append(&title_label);
-        
-        let subtitle = gtk4::Label::new(Some("Choose a theme to apply to your sway configuration"));
-        subtitle.set_css_classes(&["subtitle"]);
-        subtitle.set_halign(gtk4::Align::Start);
-        vbox.append(&subtitle);
-        
-        // List box for themes
+        let prefs_page = libadwaita::PreferencesPage::new();
+
+        // ── Custom path group ──────────────────────────────────────────────────
+        let path_group = libadwaita::PreferencesGroup::new();
+        path_group.set_title("Theme Locations");
+
+        let custom_path_entry = libadwaita::EntryRow::new();
+        custom_path_entry.set_title("Custom themes folder");
+        custom_path_entry.set_show_apply_button(true);
+        path_group.add(&custom_path_entry);
+        prefs_page.add(&path_group);
+
+        // ── Theme list group ──────────────────────────────────────────────────
+        let list_group = libadwaita::PreferencesGroup::new();
+        list_group.set_title("Available Themes");
+        list_group.set_description(Some("Choose a theme to apply to your Sway configuration"));
+
         let list_box = gtk4::ListBox::new();
         list_box.set_css_classes(&["boxed-list"]);
         list_box.set_selection_mode(gtk4::SelectionMode::Single);
-        vbox.append(&list_box);
-        
-        clamp.set_child(Some(&vbox));
+        list_group.add(&list_box);
+        prefs_page.add(&list_group);
+
+        clamp.set_child(Some(&prefs_page));
         scrolled.set_child(Some(&clamp));
         widget.append(&scrolled);
-        
-        ThemesPage { widget, list_box, app_state }
+
+        let theme_names: Rc<RefCell<Vec<ThemeSelection>>> = Rc::new(RefCell::new(Vec::new()));
+        let loading = Rc::new(std::cell::Cell::new(false));
+
+        // ── Selection signal ──────────────────────────────────────────────────
+        {
+            let state = Rc::clone(&app_state);
+            let names = Rc::clone(&theme_names);
+            let loading = Rc::clone(&loading);
+            list_box.connect_row_selected(move |_, row| {
+                if loading.get() { return; }
+                if let Some(row) = row {
+                    let idx = row.index() as usize;
+                    let selection = names.borrow().get(idx).cloned();
+                    if let Some(sel) = selection {
+                        state.borrow_mut().settings_mut().theme = Some(sel);
+                        state.borrow_mut().mark_dirty();
+                    }
+                }
+            });
+        }
+
+        // ── Custom path apply signal ──────────────────────────────────────────
+        {
+            let state = Rc::clone(&app_state);
+            let entry_ref = custom_path_entry.clone();
+            custom_path_entry.connect_apply(move |_| {
+                let path = entry_ref.text().to_string();
+                let trimmed = path.trim().to_string();
+                let custom = if trimmed.is_empty() { None } else { Some(trimmed) };
+                state.borrow_mut().settings_mut().custom_themes_path = custom;
+                state.borrow_mut().mark_dirty();
+            });
+        }
+
+        ThemesPage { widget, list_box, custom_path_entry, theme_names, loading, app_state }
     }
     
     /// Navigate to this page - load themes from app_state
@@ -61,11 +101,19 @@ impl ThemesPage {
         let custom_path = state.settings().custom_themes_path.clone();
         drop(state);
         
+        if let Some(ref p) = custom_path {
+            self.custom_path_entry.set_text(p);
+        } else {
+            self.custom_path_entry.set_text("");
+        }
+
         self.load_themes(selected.as_ref(), custom_path.as_deref());
     }
     
-    /// Load themes into the page
+    /// Load themes into the page (suppresses signal write-back via loading guard)
     pub fn load_themes(&self, selected: Option<&ThemeSelection>, custom_path: Option<&str>) {
+        self.loading.set(true);
+
         // Clear existing entries
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
@@ -73,6 +121,7 @@ impl ThemesPage {
         
         // Get available themes
         let themes = Self::available_themes(custom_path);
+        *self.theme_names.borrow_mut() = themes.clone();
         
         for (idx, theme) in themes.iter().enumerate() {
             let row = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
@@ -103,6 +152,8 @@ impl ThemesPage {
                 }
             }
         }
+
+        self.loading.set(false);
     }
     
     /// Get available themes from the filesystem
