@@ -476,7 +476,9 @@ pub fn apply_theme(
         let envd_path = base_path.join("environment.d/90-sway-config-qt.conf");
         let envd_content = build_qt_envd_content(platform_theme);
         match write_file(&envd_path, &envd_content) {
-            Ok(_) => result.files_written.push(envd_path.to_string_lossy().into()),
+            Ok(_) => result
+                .files_written
+                .push(envd_path.to_string_lossy().into()),
             Err(e) => result.errors.push(format!(
                 "Failed to write environment.d QT platform theme config: {}",
                 e
@@ -624,11 +626,8 @@ fn build_qt_color_set(
     vars: &std::collections::HashMap<String, String>,
     state: &str,
 ) -> Vec<String> {
-    let map = |k: &str, fallback: &str| {
-        vars.get(k)
-            .cloned()
-            .unwrap_or_else(|| fallback.to_string())
-    };
+    let map =
+        |k: &str, fallback: &str| vars.get(k).cloned().unwrap_or_else(|| fallback.to_string());
     let (window, button, text, highlight, link, visited, placeholder) = match state {
         "disabled" => (
             map("COLOR_SURFACE1", "#44475a"),
@@ -660,26 +659,26 @@ fn build_qt_color_set(
     };
 
     vec![
-        qt_hex(&text),                              // WindowText
-        qt_hex(&button),                            // Button
-        qt_hex(&map("COLOR_SURFACE1", "#45475a")), // Light
-        qt_hex(&map("COLOR_SURFACE2", "#585b70")), // Midlight
-        qt_hex(&map("COLOR_MANTLE", "#181825")),   // Dark
-        qt_hex(&map("COLOR_SURFACE2", "#585b70")), // Mid
-        qt_hex(&text),                              // Text
-        qt_hex(&map("COLOR_CRUST", "#11111b")),    // BrightText
-        qt_hex(&text),                              // ButtonText
-        qt_hex(&map("COLOR_BASE", "#1e1e2e")),     // Base
-        qt_hex(&window),                            // Window
-        qt_hex(&map("COLOR_MANTLE", "#181825")),   // Shadow
-        qt_hex(&highlight),                         // Highlight
-        qt_hex(&map("COLOR_BASE", "#1e1e2e")),     // HighlightedText
-        qt_hex(&link),                              // Link
-        qt_hex(&visited),                           // LinkVisited
-        qt_hex(&map("COLOR_SURFACE0", "#313244")), // AlternateBase
-        qt_hex(&map("COLOR_SURFACE0", "#313244")), // ToolTipBase
-        qt_hex(&text),                              // ToolTipText
-        qt_hex(&placeholder),                       // PlaceholderText
+        qt_hex(&text),                                         // WindowText
+        qt_hex(&button),                                       // Button
+        qt_hex(&map("COLOR_SURFACE1", "#45475a")),             // Light
+        qt_hex(&map("COLOR_SURFACE2", "#585b70")),             // Midlight
+        qt_hex(&map("COLOR_MANTLE", "#181825")),               // Dark
+        qt_hex(&map("COLOR_SURFACE2", "#585b70")),             // Mid
+        qt_hex(&text),                                         // Text
+        qt_hex(&map("COLOR_CRUST", "#11111b")),                // BrightText
+        qt_hex(&text),                                         // ButtonText
+        qt_hex(&map("COLOR_BASE", "#1e1e2e")),                 // Base
+        qt_hex(&window),                                       // Window
+        qt_hex(&map("COLOR_MANTLE", "#181825")),               // Shadow
+        qt_hex(&highlight),                                    // Highlight
+        qt_hex(&map("COLOR_BASE", "#1e1e2e")),                 // HighlightedText
+        qt_hex(&link),                                         // Link
+        qt_hex(&visited),                                      // LinkVisited
+        qt_hex(&map("COLOR_SURFACE0", "#313244")),             // AlternateBase
+        qt_hex(&map("COLOR_SURFACE0", "#313244")),             // ToolTipBase
+        qt_hex(&text),                                         // ToolTipText
+        qt_hex(&placeholder),                                  // PlaceholderText
         qt_hex_alpha(&map("COLOR_LAVENDER", "#b4befe"), 0x80), // Accent
     ]
 }
